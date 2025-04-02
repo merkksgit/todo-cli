@@ -1,5 +1,6 @@
 # Todo CLI
 
+[![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](#)
 [![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)](#)
 [![Obsidian](https://img.shields.io/badge/Obsidian-%23483699.svg?&logo=obsidian&logoColor=white)](#)
 
@@ -48,7 +49,10 @@ todo help                    - Show this help message
 
 ```bash
 # Add a new todo
-todo "Buy groceries"
+todo Buy groceries
+
+# If the todo has a command in it e.g. "help", use double quotes
+todo "help mother with groceries"
 
 # List all todos
 todo list

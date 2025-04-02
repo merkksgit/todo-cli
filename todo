@@ -127,8 +127,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             exit 1
         fi
         
-        # Replace [ ] with [x] - more robust approach
-        # Use sed directly since bash parameter expansion may have issues with spaces
+        # Replace [ ] with [x]
         new_line=$(echo "$current_line" | sed 's/- \[ \]/- [x]/')
         
         # Double-check if replacement worked
@@ -191,8 +190,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             exit 1
         fi
         
-        # Replace [x] with [ ] - more robust approach
-        # Use sed directly since bash parameter expansion may have issues with spaces
+        # Replace [x] with [ ]
         new_line=$(echo "$current_line" | sed 's/- \[x\]/- [ ]/')
         
         # Double-check if replacement worked
@@ -327,7 +325,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             for arg in "$@"; do
                 new_description="$new_description $arg"
             done
-            new_description="${new_description:1}"  # Trim leading space
+            new_description="${new_description:1}"
         fi
         
         # Check if it's a completed task
@@ -364,7 +362,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         fi
         
         # Update the configuration
-        NEW_TODO_FILE=$(eval echo "$2")  # Expand ~ if present
+        NEW_TODO_FILE=$(eval echo "$2")
         
         # Check if path is a directory, add a default filename if it is
         if [ -d "$NEW_TODO_FILE" ]; then
