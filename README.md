@@ -4,7 +4,7 @@
 [![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)](#)
 [![Obsidian](https://img.shields.io/badge/Obsidian-%23483699.svg?&logo=obsidian&logoColor=white)](#)
 
-A simple, powerful command-line tool for managing your todos in markdown format. Seamlessly integrates with Obsidian and other markdown editors.
+A simple command-line tool for managing your todos in markdown format. Seamlessly integrates with Obsidian and other markdown editors.
 
 ## Features
 
