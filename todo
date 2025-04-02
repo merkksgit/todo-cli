@@ -1,0 +1,409 @@
+#!/bin/bash
+
+# Default configuration
+DEFAULT_TODO_FILE="$HOME/todos.md"
+CONFIG_FILE="$HOME/.todo_config"
+
+# Load configuration if exists
+if [ -f "$CONFIG_FILE" ]; then
+    TODO_FILE=$(cat "$CONFIG_FILE")
+else
+    TODO_FILE="$DEFAULT_TODO_FILE"
+    echo "$TODO_FILE" > "$CONFIG_FILE"
+    echo ""
+    echo "Using default todo file: $TODO_FILE"
+fi
+
+# Create todo file if it doesn't exist
+create_todo_file() {
+    # Create directory if it doesn't exist
+    TODO_DIR=$(dirname "$TODO_FILE")
+    if [ ! -d "$TODO_DIR" ]; then
+        mkdir -p "$TODO_DIR"
+    fi
+    
+    if [ ! -f "$TODO_FILE" ]; then
+        echo "# Todo List" > "$TODO_FILE"
+        echo "" >> "$TODO_FILE"
+        echo ""
+        echo "Todo file created at $TODO_FILE"
+    fi
+}
+
+# Only create the file when needed, not at script start
+if [ $# -eq 0 ] || [ "$1" = "config" ]; then
+    create_todo_file
+fi
+
+# Function to display usage information
+show_usage() {
+    echo ""
+    echo "Usage:"
+    echo "  todo \"<task description>\"       - Add a new todo item (use quotes for commands)"
+    echo "  todo <task without commands>    - Add a new todo item"
+    echo "  todo list                       - List all todo items"
+    echo "  todo done <number>              - Mark a todo as completed"
+    echo "  todo undo <number>              - Mark a completed todo as not done"
+    echo "  todo remove <number>            - Remove a todo item"
+    echo "  todo clear                      - Remove all completed tasks"
+    echo "  todo edit <number>              - Edit an existing todo item"
+    echo "  todo config <path>              - Set the location of the todo file"
+    echo "  todo help                       - Show this help message"
+}
+
+# Function to check if a value exists in an array
+in_array() {
+    local value="$1"
+    shift
+    for item; do
+        [[ "$item" == "$value" ]] && return 0
+    done
+    return 1
+}
+
+# Reserved commands that can't be used in todo descriptions without quotes
+COMMANDS=("list" "done" "undo" "remove" "clear" "edit" "config" "help")
+
+# Handle commands
+if [ $# -eq 0 ]; then
+    # No arguments provided, show usage
+    show_usage
+elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ "$1" = "clear" ] || [ "$1" = "help" ] || { [ "$1" = "done" ] && [ $# -eq 2 ]; } || { [ "$1" = "undo" ] && [ $# -eq 2 ]; } || { [ "$1" = "remove" ] && [ $# -eq 2 ]; } || { [ "$1" = "edit" ] && [ $# -ge 2 ]; } || { [ "$1" = "config" ] && [ $# -le 2 ]; }; }; then
+    # This is a command with correct number of arguments
+    if [ "$1" = "list" ]; then
+        # List all todos with line numbers
+        echo ""
+        echo "# Todo List"
+        
+        # Get all todo lines with their line numbers
+        line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
+        
+        # Counter for displayed numbers
+        display_num=1
+        
+        # Read the file line by line
+        while IFS= read -r line_num; do
+            todo_line=$(sed -n "${line_num}p" "$TODO_FILE")
+            echo "$display_num: $todo_line"
+            display_num=$((display_num+1))
+        done <<< "$line_nums"
+    elif [ "$1" = "done" ]; then
+        # Mark a todo as done
+        if [ -z "$2" ]; then
+            echo ""
+            echo "Error: Please specify the number of the todo to mark as done."
+            echo "Usage: todo done <number>"
+            exit 1
+        fi
+        
+        # Get the line numbers of all todos
+        line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
+        
+        # Convert displayed number to actual line number
+        todo_num=1
+        actual_line=""
+        
+        while IFS= read -r line_num; do
+            if [ "$todo_num" -eq "$2" ]; then
+                actual_line="$line_num"
+                break
+            fi
+            todo_num=$((todo_num+1))
+        done <<< "$line_nums"
+        
+        if [ -z "$actual_line" ]; then
+            echo ""
+            echo "Error: Todo #$2 does not exist."
+            exit 1
+        fi
+        
+        # Get the current content of the line
+        current_line=$(sed -n "${actual_line}p" "$TODO_FILE")
+        
+        # Check if it's already done
+        if [[ "$current_line" == *"- [x]"* ]]; then
+            echo ""
+            echo "Error: Todo #$2 is already marked as done."
+            exit 1
+        fi
+        
+        # Replace [ ] with [x] - more robust approach
+        # Use sed directly since bash parameter expansion may have issues with spaces
+        new_line=$(echo "$current_line" | sed 's/- \[ \]/- [x]/')
+        
+        # Double-check if replacement worked
+        if [ "$new_line" = "$current_line" ]; then
+            # Try another pattern
+            new_line=$(echo "$current_line" | sed 's/-\s*\[\s*\]/-\ [x]/')
+        fi
+        
+        # Create a temp file with the modification
+        sed "${actual_line}s/.*/${new_line}/" "$TODO_FILE" > "$TODO_FILE.tmp"
+        
+        # Check if the temp file has content before replacing
+        if [ -s "$TODO_FILE.tmp" ]; then
+            mv "$TODO_FILE.tmp" "$TODO_FILE"
+            echo ""
+            echo "Marked todo #$2 as done!"
+        else
+            echo ""
+            echo "Error: Something went wrong while updating the file."
+            rm "$TODO_FILE.tmp"
+            exit 1
+        fi
+    elif [ "$1" = "undo" ]; then
+        # Mark a completed todo as not done
+        if [ -z "$2" ]; then
+            echo ""
+            echo "Error: Please specify the number of the todo to undo."
+            echo "Usage: todo undo <number>"
+            exit 1
+        fi
+        
+        # Get the line numbers of all todos
+        line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
+        
+        # Convert displayed number to actual line number
+        todo_num=1
+        actual_line=""
+        
+        while IFS= read -r line_num; do
+            if [ "$todo_num" -eq "$2" ]; then
+                actual_line="$line_num"
+                break
+            fi
+            todo_num=$((todo_num+1))
+        done <<< "$line_nums"
+        
+        if [ -z "$actual_line" ]; then
+            echo ""
+            echo "Error: Todo #$2 does not exist."
+            exit 1
+        fi
+        
+        # Get the current content of the line
+        current_line=$(sed -n "${actual_line}p" "$TODO_FILE")
+        
+        # Check if it's not done yet
+        if [[ "$current_line" != *"- [x]"* ]]; then
+            echo ""
+            echo "Error: Todo #$2 is not marked as done."
+            exit 1
+        fi
+        
+        # Replace [x] with [ ] - more robust approach
+        # Use sed directly since bash parameter expansion may have issues with spaces
+        new_line=$(echo "$current_line" | sed 's/- \[x\]/- [ ]/')
+        
+        # Double-check if replacement worked
+        if [ "$new_line" = "$current_line" ]; then
+            # Try another pattern
+            new_line=$(echo "$current_line" | sed 's/-\s*\[x\]/-\ [ ]/')
+        fi
+        
+        # Create a temp file with the modification
+        sed "${actual_line}s/.*/${new_line}/" "$TODO_FILE" > "$TODO_FILE.tmp"
+        
+        # Check if the temp file has content before replacing
+        if [ -s "$TODO_FILE.tmp" ]; then
+            mv "$TODO_FILE.tmp" "$TODO_FILE"
+            echo ""
+            echo "Marked todo #$2 as not done!"
+        else
+            echo ""
+            echo "Error: Something went wrong while updating the file."
+            rm "$TODO_FILE.tmp"
+            exit 1
+        fi
+    elif [ "$1" = "remove" ]; then
+        # Remove a todo item
+        if [ -z "$2" ]; then
+            echo ""
+            echo "Error: Please specify the number of the todo to remove."
+            echo "Usage: todo remove <number>"
+            exit 1
+        fi
+        
+        # Get the line numbers of all todos
+        line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
+        
+        # Convert displayed number to actual line number
+        todo_num=1
+        actual_line=""
+        
+        while IFS= read -r line_num; do
+            if [ "$todo_num" -eq "$2" ]; then
+                actual_line="$line_num"
+                break
+            fi
+            todo_num=$((todo_num+1))
+        done <<< "$line_nums"
+        
+        if [ -z "$actual_line" ]; then
+            echo ""
+            echo "Error: Todo #$2 does not exist."
+            exit 1
+        fi
+        
+        # Get the task that will be removed
+        task=$(sed -n "${actual_line}p" "$TODO_FILE")
+        
+        # Delete the specified line
+        sed "${actual_line}d" "$TODO_FILE" > "$TODO_FILE.tmp"
+        
+        # Check if the temp file has content before replacing
+        if [ -s "$TODO_FILE.tmp" ]; then
+            mv "$TODO_FILE.tmp" "$TODO_FILE"
+            echo ""
+            echo "Removed todo: ${task#*]} "
+        else
+            echo ""
+            echo "Error: Something went wrong while updating the file."
+            rm "$TODO_FILE.tmp"
+            exit 1
+        fi
+    elif [ "$1" = "clear" ]; then
+        # Remove all completed tasks
+        # Make a backup of the file
+        cp "$TODO_FILE" "${TODO_FILE}.bak"
+        
+        # Remove all lines with "[x]"
+        grep -v -- "- \[x\]" "$TODO_FILE" > "${TODO_FILE}.tmp"
+        
+        # Check if the temp file has content before replacing
+        if [ -s "${TODO_FILE}.tmp" ]; then
+            mv "${TODO_FILE}.tmp" "$TODO_FILE"
+            echo ""
+            echo "Cleared all completed tasks!"
+        else
+            echo ""
+            echo "Warning: All tasks were marked as completed. File remains unchanged."
+            rm "${TODO_FILE}.tmp"
+        fi
+    elif [ "$1" = "edit" ]; then
+        # Edit an existing todo
+        if [ -z "$2" ]; then
+            echo ""
+            echo "Error: Please specify the number of the todo to edit."
+            echo "Usage: todo edit <number> <new description>"
+            exit 1
+        fi
+        
+        # Get the line numbers of all todos
+        line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
+        
+        # Convert displayed number to actual line number
+        todo_num=1
+        actual_line=""
+        
+        while IFS= read -r line_num; do
+            if [ "$todo_num" -eq "$2" ]; then
+                actual_line="$line_num"
+                break
+            fi
+            todo_num=$((todo_num+1))
+        done <<< "$line_nums"
+        
+        if [ -z "$actual_line" ]; then
+            echo ""
+            echo "Error: Todo #$2 does not exist."
+            exit 1
+        fi
+        
+        # Get the current content of the line
+        current_line=$(sed -n "${actual_line}p" "$TODO_FILE")
+        
+        if [ -z "$3" ]; then
+            # No new description provided, prompt the user
+            old_description=${current_line#*]} 
+            echo ""
+            echo "Current task: $old_description"
+            echo -n "New description: "
+            read -r new_description
+        else
+            # Combine all arguments after the line number into a single task description
+            shift 2
+            new_description=""
+            for arg in "$@"; do
+                new_description="$new_description $arg"
+            done
+            new_description="${new_description:1}"  # Trim leading space
+        fi
+        
+        # Check if it's a completed task
+        if [[ "$current_line" == *"- [x]"* ]]; then
+            checkbox="- [x]"
+        else
+            checkbox="- [ ]"
+        fi
+        
+        # Create the new line
+        new_line="$checkbox $new_description"
+        
+        # Create a temp file with the modification
+        sed "${actual_line}s/.*/${new_line}/" "$TODO_FILE" > "$TODO_FILE.tmp"
+        
+        # Check if the temp file has content before replacing
+        if [ -s "$TODO_FILE.tmp" ]; then
+            mv "$TODO_FILE.tmp" "$TODO_FILE"
+            echo ""
+            echo "Updated todo #$2!"
+        else
+            echo ""
+            echo "Error: Something went wrong while updating the file."
+            rm "$TODO_FILE.tmp"
+            exit 1
+        fi
+    elif [ "$1" = "config" ]; then
+        # Set the todo file location
+        if [ -z "$2" ]; then
+            echo ""
+            echo "Current todo file: $TODO_FILE"
+            echo "Usage: todo config <path>"
+            exit 0
+        fi
+        
+        # Update the configuration
+        NEW_TODO_FILE=$(eval echo "$2")  # Expand ~ if present
+        
+        # Check if path is a directory, add a default filename if it is
+        if [ -d "$NEW_TODO_FILE" ]; then
+            NEW_TODO_FILE="${NEW_TODO_FILE%/}/todos.md"
+            echo ""
+            echo "Notice: Path is a directory. Using $NEW_TODO_FILE as the todo file."
+        fi
+        
+        # Store the new path in config
+        echo "$NEW_TODO_FILE" > "$CONFIG_FILE"
+        
+        # Update current variable
+        TODO_FILE="$NEW_TODO_FILE"
+        
+        # Create file if needed
+        create_todo_file
+        
+        echo ""
+        echo "Todo file location updated to: $TODO_FILE"
+    elif [ "$1" = "help" ]; then
+        # Show help
+        show_usage
+    fi
+else
+    # Add new todo item
+    # Either this is not a command or it's a command with incorrect args
+    # In either case, treat it as a todo description
+    
+    # Combine all arguments into a single task description
+    task_description=""
+    for arg in "$@"; do
+        task_description="$task_description $arg"
+    done
+    
+    # Trim leading space
+    task_description="${task_description:1}"
+    
+    # Add the new todo with checkbox to the file
+    echo "- [ ] $task_description" >> "$TODO_FILE"
+    echo ""
+    echo "Added todo: $task_description"
+fi

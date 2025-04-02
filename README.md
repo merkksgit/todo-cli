@@ -1,5 +1,8 @@
 # Todo CLI
 
+[![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)](#)
+[![Obsidian](https://img.shields.io/badge/Obsidian-%23483699.svg?&logo=obsidian&logoColor=white)](#)
+
 A simple, powerful command-line tool for managing your todos in markdown format. Seamlessly integrates with Obsidian and other markdown editors.
 
 ## Features
@@ -15,7 +18,7 @@ A simple, powerful command-line tool for managing your todos in markdown format.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/todo-cli.git
+git clone https://github.com/merkksgit/todo-cli.git
 
 # Move to a directory in your PATH
 cp todo-cli/todo ~/.local/bin/
@@ -54,7 +57,7 @@ todo list
 todo done 1
 
 # Edit a todo
-todo edit 2 "Call mom at 6pm"
+todo edit 2
 
 # Remove a todo
 todo remove 3
@@ -68,8 +71,9 @@ todo clear
 Todo CLI really shines when used in conjunction with markdown editors like Obsidian:
 
 1. Configure your todo file to be stored within your Obsidian vault:
+
    ```bash
-   todo config "/path/to/your/Obsidian/vault/todos.md"
+   todo config /path/to/your/Obsidian/vault/todos.md
    ```
 
 2. Now you can:
@@ -89,8 +93,10 @@ By default, todos are stored in `~/todos.md`. You can change this:
 todo config ~/Documents/my-todos.md
 
 # Point to your Obsidian vault
-todo config "~/Obsidian/Work/todos.md"
+todo config ~/Obsidian/Work/todos.md
 ```
+
+The configuration is stored in ~/.todo_config, which is a simple text file containing the full path to your todo file. This allows your todo file location to persist between sessions.
 
 ## Requirements
 
@@ -100,7 +106,3 @@ todo config "~/Obsidian/Work/todos.md"
 ## License
 
 MIT
-
-## Contributing
-
-Contributions are welcome! Feel free to open issues or submit pull requests.
