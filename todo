@@ -225,6 +225,13 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Get the line numbers of all todos
         line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
         
+        # Check if there are any todos
+        if [ -z "$line_nums" ]; then
+            echo ""
+            echo "Error: No todos found in the file."
+            exit 1
+        fi
+        
         # Convert displayed number to actual line number
         todo_num=1
         actual_line=""
@@ -249,15 +256,30 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Delete the specified line
         sed "${actual_line}d" "$TODO_FILE" > "$TODO_FILE.tmp"
         
-        # Check if the temp file has content before replacing
-        if [ -s "$TODO_FILE.tmp" ]; then
-            mv "$TODO_FILE.tmp" "$TODO_FILE"
+        # Check if the temp file has content
+        # Even if the file is now empty except for the header, that's ok
+        if [ -f "$TODO_FILE.tmp" ]; then
+            # If there are no remaining todos, make sure the header is preserved
+            if ! grep -q -- "- \[" "$TODO_FILE.tmp"; then
+                # Check if the file at least has the header
+                if ! grep -q "# Todo List" "$TODO_FILE.tmp"; then
+                    # Recreate the header
+                    echo "# Todo List" > "$TODO_FILE"
+                    echo "" >> "$TODO_FILE"
+                else
+                    # Just use the file as is (it has the header already)
+                    mv "$TODO_FILE.tmp" "$TODO_FILE"
+                fi
+            else
+                # There are still todos, use the modified file
+                mv "$TODO_FILE.tmp" "$TODO_FILE"
+            fi
             echo ""
             echo "Removed todo: ${task#*]} "
         else
             echo ""
             echo "Error: Something went wrong while updating the file."
-            rm "$TODO_FILE.tmp"
+            [ -f "$TODO_FILE.tmp" ] && rm "$TODO_FILE.tmp"
             exit 1
         fi
     elif [ "$1" = "clear" ]; then
