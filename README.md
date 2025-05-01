@@ -12,7 +12,13 @@ A simple command-line tool for managing your todos in markdown format. Seamlessl
 - Store todos in a standard markdown file with checkbox syntax (`- [ ]`)
 - Mark todos as done/undone with simple commands
 - Edit, remove, and clear completed todos
+- Set priority levels (high, medium, low) for tasks
+- Add due dates to tasks
+- Organize with categories/tags
+- Search for specific todos
+- View statistics about your tasks
 - Configure where your todo list is stored
+- Color-coded terminal output for better readability
 - Lightweight, fast, and works on any Unix-like system
 
 ## Installation
@@ -33,29 +39,54 @@ Make sure `~/.local/bin` is in your PATH.
 ## Usage
 
 ```
-todo "<task description>"    - Add a new todo item (use quotes for commands)
-todo <task without commands> - Add a new todo item
-todo list                    - List all todo items
-todo done <number>           - Mark a todo as completed
-todo undo <number>           - Mark a completed todo as not done
-todo remove <number>         - Remove a todo item
-todo clear                   - Remove all completed tasks
-todo edit <number>           - Edit an existing todo item
-todo config <path>           - Set the location of the todo file
-todo help                    - Show this help message
+USAGE:
+  todo "<task description>"       - Add a new todo item (use quotes for commands)
+  todo <task without commands>    - Add a new todo item
+
+TASK OPTIONS:
+  -p, --priority <level>          - Set priority (high, medium, low)
+  -d, --due <date>                - Set due date (DD-MM-YYYY, today, tomorrow)
+  -c, --category <category>       - Add a category tag
+
+COMMANDS:
+  todo list                       - List all todo items
+  todo done <number>              - Mark a todo as completed
+  todo undo <number>              - Mark a completed todo as not done
+  todo remove <number>            - Remove a todo item
+  todo clear                      - Remove all completed tasks
+  todo edit <number>              - Edit an existing todo item
+  todo search <term>              - Search for todos containing term
+  todo stats                      - Show todo statistics
+  todo config <path>              - Set the location of the todo file
+  todo help                       - Show this help message
 ```
 
 ## Examples
 
 ```bash
-# Add a new todo
+# Add a new simple todo
 todo Buy groceries
 
-# If the todo has a command in it e.g. "help", use double quotes
-todo "help mother with groceries"
+# Add todo with priority
+todo "Complete report" -p high
+
+# Add todo with due date
+todo "Call doctor" -d tomorrow
+
+# Add todo with category
+todo "Update website" -c work
+
+# Add todo with multiple attributes
+todo "Team meeting" -p medium -d "05-05-2025" -c meetings
 
 # List all todos
 todo list
+
+# Search todos
+todo search groceries
+
+# See todo statistics
+todo stats
 
 # Mark the first todo as done
 todo done 1
@@ -68,6 +99,20 @@ todo remove 3
 
 # Clear all completed todos
 todo clear
+```
+
+## Todo Format
+
+Todos are stored in markdown format:
+
+```markdown
+# Todo List
+
+- [ ] Simple task
+- [ ] Task with priority (high)
+- [ ] Task with due date (due: 05-05-2025)
+- [ ] Task with category #work
+- [x] Completed task with priority (medium) #project
 ```
 
 ## Use with Obsidian for Best Experience
@@ -85,6 +130,7 @@ Todo CLI really shines when used in conjunction with markdown editors like Obsid
    - See and interact with them in Obsidian with proper markdown formatting
    - Use Obsidian's checkbox features to mark todos as complete visually
    - Benefit from Obsidian's search and linking capabilities
+   - Organize tasks with categories that work as Obsidian tags
 
 This creates a seamless workflow where you can quickly capture tasks from the terminal and organize/review them in your knowledge management system.
 

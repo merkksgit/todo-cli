@@ -4,6 +4,17 @@
 DEFAULT_TODO_FILE="$HOME/todos.md"
 CONFIG_FILE="$HOME/.todo_config"
 
+# Terminal colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+GRAY='\033[0;37m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
 # Load configuration if exists
 if [ -f "$CONFIG_FILE" ]; then
     TODO_FILE=$(cat "$CONFIG_FILE")
@@ -23,6 +34,7 @@ create_todo_file() {
     fi
  
     if [ ! -f "$TODO_FILE" ]; then
+        # Create a properly formatted todo file with header
         echo "# Todo List" > "$TODO_FILE"
         echo "" >> "$TODO_FILE"
         echo ""
@@ -38,15 +50,24 @@ fi
 # Function to display usage information
 show_usage() {
     echo ""
-    echo "Usage:"
+    echo -e "${BOLD}USAGE:${NC}"
     echo "  todo \"<task description>\"       - Add a new todo item (use quotes for commands)"
     echo "  todo <task without commands>    - Add a new todo item"
+    echo ""
+    echo -e "${BOLD}TASK OPTIONS:${NC}"
+    echo "  -p, --priority <level>          - Set priority (high, medium, low)"
+    echo -e "  -d, --due <date>                - Set due date (DD-MM-YYYY, today, tomorrow)"
+    echo "  -c, --category <category>       - Add a category tag"
+    echo ""
+    echo -e "${BOLD}COMMANDS:${NC}"
     echo "  todo list                       - List all todo items"
     echo "  todo done <number>              - Mark a todo as completed"
     echo "  todo undo <number>              - Mark a completed todo as not done"
     echo "  todo remove <number>            - Remove a todo item"
     echo "  todo clear                      - Remove all completed tasks"
     echo "  todo edit <number>              - Edit an existing todo item"
+    echo "  todo search <term>              - Search for todos containing term"
+    echo "  todo stats                      - Show todo statistics"
     echo "  todo config <path>              - Set the location of the todo file"
     echo "  todo help                       - Show this help message"
 }
@@ -61,37 +82,291 @@ in_array() {
     return 1
 }
 
+# Function to parse a date string into YYYY-MM-DD format (internal storage)
+parse_date() {
+    local date_str="$1"
+    local result=""
+    
+    case "$date_str" in
+        today)
+            result=$(date +%Y-%m-%d)
+            ;;
+        tomorrow)
+            # Try GNU date first
+            result=$(date -d "+1 day" +%Y-%m-%d 2>/dev/null)
+            
+            # If GNU date failed, try BSD date (macOS)
+            if [ -z "$result" ]; then
+                result=$(date -v+1d +%Y-%m-%d 2>/dev/null)
+            fi
+            
+            # If that failed too, try another BSD date format
+            if [ -z "$result" ]; then
+                result=$(date -j -v+1d +%Y-%m-%d 2>/dev/null)
+            fi
+            ;;
+        *)
+            # Check if it's already in DD-MM-YYYY format
+            if [[ "$date_str" =~ ^[0-9]{2}-[0-9]{2}-[0-9]{4}$ ]]; then
+                # Convert to YYYY-MM-DD for storage
+                day=${date_str:0:2}
+                month=${date_str:3:2}
+                year=${date_str:6:4}
+                result="$year-$month-$day"
+            # Check if it's in YYYY-MM-DD format
+            elif [[ "$date_str" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+                result="$date_str"
+            else
+                # Try to parse using GNU date
+                result=$(date -d "$date_str" +%Y-%m-%d 2>/dev/null)
+                
+                # If that failed, try BSD date
+                if [ -z "$result" ]; then
+                    result=$(date -j -f "%d-%m-%Y" "$date_str" +%Y-%m-%d 2>/dev/null)
+                fi
+                
+                # If all else fails
+                if [ -z "$result" ]; then
+                    echo "Invalid date format. Please use DD-MM-YYYY, today, or tomorrow."
+                    exit 1
+                fi
+            fi
+            ;;
+    esac
+    
+    echo "$result"
+}
+
+# Function to format date display (make it friendly, use European format)
+format_date_display() {
+    local date_str="$1"
+    local today
+    local tomorrow
+    
+    today=$(date +%Y-%m-%d)
+    
+    # Try GNU date first for tomorrow
+    tomorrow=$(date -d "+1 day" +%Y-%m-%d 2>/dev/null)
+    
+    # If GNU date failed, try BSD date
+    if [ -z "$tomorrow" ]; then
+        tomorrow=$(date -v+1d +%Y-%m-%d 2>/dev/null)
+    fi
+    
+    # If that failed too, try another BSD format
+    if [ -z "$tomorrow" ]; then
+        tomorrow=$(date -j -v+1d +%Y-%m-%d 2>/dev/null)
+    fi
+    
+    case "$date_str" in
+        "$today")
+            echo "Today"
+            ;;
+        "$tomorrow")
+            echo "Tomorrow"
+            ;;
+        *)
+            # Convert YYYY-MM-DD to DD-MM-YYYY
+            year=${date_str:0:4}
+            month=${date_str:5:2}
+            day=${date_str:8:2}
+            echo "$day-$month-$year"
+            ;;
+    esac
+}
+
+# Function to display a todo item with formatting
+format_todo_display() {
+    local todo_line="$1"
+    local num="$2"
+    local status=""
+    local task_color=""
+    local display_text=""
+    local priority_display=""
+    local due_date_display=""
+    local category_display=""
+    local metadata=""
+    local date_raw=""
+    local date_display=""
+    local cat_name=""
+    
+    # Check if it's completed
+    if [[ "$todo_line" == *"- [x]"* ]]; then
+        status="${GREEN}✓${NC}"
+        task_color="${GRAY}"
+    else
+        status=" "
+        task_color="${NC}"
+    fi
+    
+    # Extract the task text (everything after the checkbox)
+    display_text="${todo_line#*]} "
+    
+    # Handle priority if present
+    if [[ "$display_text" == *"(high)"* || "$display_text" == *"(High)"* ]]; then
+        priority_display="${RED}HIGH${NC}"
+        display_text=$(echo "$display_text" | sed -E 's/\(high\)|\(High\)//')
+    elif [[ "$display_text" == *"(medium)"* || "$display_text" == *"(Medium)"* ]]; then
+        priority_display="${YELLOW}MEDIUM${NC}"
+        display_text=$(echo "$display_text" | sed -E 's/\(medium\)|\(Medium\)//')
+    elif [[ "$display_text" == *"(low)"* || "$display_text" == *"(Low)"* ]]; then
+        priority_display="${BLUE}LOW${NC}"
+        display_text=$(echo "$display_text" | sed -E 's/\(low\)|\(Low\)//')
+    fi
+    
+    # Handle due date if present
+    if [[ "$display_text" == *"(due:"* ]]; then
+        # Extract date using sed
+        date_raw=$(echo "$display_text" | sed -E 's/.*\(due: ([^)]+)\).*/\1/')
+        date_display=$(format_date_display "$date_raw")
+        due_date_display="${PURPLE}DUE: $date_display${NC}"
+        display_text=$(echo "$display_text" | sed -E 's/\(due: [^)]+\)//')
+    fi
+    
+    # Handle category if present
+    if [[ "$display_text" == *"#"* ]]; then
+        # Extract category using sed
+        cat_name=$(echo "$display_text" | sed -E 's/.*#([a-zA-Z0-9_-]+).*/\1/')
+        category_display="${CYAN}#${cat_name}${NC}"
+        display_text=$(echo "$display_text" | sed -E 's/\#[a-zA-Z0-9_-]+//')
+    fi
+    
+    # Clean up extra spaces
+    display_text=$(echo "$display_text" | sed -E 's/  +/ /g' | sed -E 's/^ | $//')
+    
+    # Print the todo in a single line
+    printf "${BOLD}%2d${NC} [${status}] ${task_color}%-40s${NC}" "$num" "$display_text"
+    
+    # Create metadata string with commas
+    if [ -n "$priority_display" ]; then
+        metadata="${priority_display}"
+    fi
+    
+    if [ -n "$due_date_display" ]; then
+        if [ -n "$metadata" ]; then
+            metadata="${metadata}, ${due_date_display}"
+        else
+            metadata="${due_date_display}"
+        fi
+    fi
+    
+    if [ -n "$category_display" ]; then
+        if [ -n "$metadata" ]; then
+            metadata="${metadata}, ${category_display}"
+        else
+            metadata="${category_display}"
+        fi
+    fi
+    
+    # Print metadata if any exists
+    if [ -n "$metadata" ]; then
+        printf " %b" "$metadata"
+    fi
+    
+    # End the line
+    printf "\n"
+}
+
+# Function to show statistics about todos
+show_stats() {
+    echo ""
+    echo -e "${BOLD}Todo Statistics${NC}"
+    echo ""
+    
+    # Count total todos
+    local total=$(grep -c -- "- \[" "$TODO_FILE")
+    
+    # Count completed todos
+    local completed=$(grep -c -- "- \[x\]" "$TODO_FILE")
+    
+    # Calculate pending todos
+    local pending=$((total - completed))
+    
+    # Calculate completion percentage
+    local percentage=0
+    if [ $total -gt 0 ]; then
+        percentage=$((completed * 100 / total))
+    fi
+    
+    # Count todos by priority
+    local high=$(grep -c -i -- "(high)" "$TODO_FILE")
+    local medium=$(grep -c -i -- "(medium)" "$TODO_FILE")
+    local low=$(grep -c -i -- "(low)" "$TODO_FILE")
+    
+    # Count todos with due dates
+    local with_due=$(grep -c -- "(due:" "$TODO_FILE")
+    
+    # Count todos by category
+    local categories=$(grep -o -E "#[a-zA-Z0-9_-]+" "$TODO_FILE" | sort | uniq)
+    
+    # Print statistics
+    echo -e "${BOLD}Summary:${NC}"
+    echo -e "  Total: ${BOLD}$total${NC}, Completed: ${GREEN}$completed${NC}, Pending: ${YELLOW}$pending${NC}, Progress: ${CYAN}$percentage%${NC}"
+    echo ""
+    
+    echo -e "${BOLD}By Priority:${NC}"
+            echo -e "${GREEN}Completed: $completed${NC}, ${YELLOW}Pending: $pending${NC}, ${RED}High: $high${NC}, ${YELLOW}Medium: $medium${NC}, ${BLUE}Low: $low${NC}"
+    echo ""
+    
+    echo -e "${BOLD}Due Dates:${NC}"
+    echo -e "  Tasks with due dates: ${PURPLE}$with_due${NC}"
+    echo ""
+    
+    if [ -n "$categories" ]; then
+        echo -e "${BOLD}Categories:${NC}"
+        while IFS= read -r category; do
+            local cat_name="${category#\#}"
+            local cat_count=$(grep -c -- "$category" "$TODO_FILE")
+            echo -e "  ${CYAN}#$cat_name${NC}: $cat_count"
+        done <<< "$categories"
+    fi
+}
+
 # Reserved commands that can't be used in todo descriptions without quotes
-COMMANDS=("list" "done" "undo" "remove" "clear" "edit" "config" "help")
+COMMANDS=("list" "done" "undo" "remove" "clear" "edit" "config" "help" "search" "stats")
 
 # Handle commands
 if [ $# -eq 0 ]; then
     # No arguments provided, show usage
     show_usage
-elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ "$1" = "clear" ] || [ "$1" = "help" ] || { [ "$1" = "done" ] && [ $# -eq 2 ]; } || { [ "$1" = "undo" ] && [ $# -eq 2 ]; } || { [ "$1" = "remove" ] && [ $# -eq 2 ]; } || { [ "$1" = "edit" ] && [ $# -ge 2 ]; } || { [ "$1" = "config" ] && [ $# -le 2 ]; }; }; then
+elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ "$1" = "clear" ] || [ "$1" = "help" ] || [ "$1" = "stats" ] || { [ "$1" = "search" ] && [ $# -ge 2 ]; } || { [ "$1" = "done" ] && [ $# -eq 2 ]; } || { [ "$1" = "undo" ] && [ $# -eq 2 ]; } || { [ "$1" = "remove" ] && [ $# -eq 2 ]; } || { [ "$1" = "edit" ] && [ $# -ge 2 ]; } || { [ "$1" = "config" ] && [ $# -le 2 ]; }; }; then
     # This is a command with correct number of arguments
     if [ "$1" = "list" ]; then
         # List all todos with line numbers
         echo ""
-        echo "# Todo List"
+        echo -e "${BOLD}# Todo List${NC}"
+        echo ""
  
-        # Get all todo lines with their line numbers
-        line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
+        # Get all todo lines with their line numbers - strict pattern to match only todo items
+        line_nums=$(grep -n -- "^- \[[x ]\]" "$TODO_FILE" | cut -d: -f1)
  
         # Counter for displayed numbers
         display_num=1
  
-        # Read the file line by line
-        while IFS= read -r line_num; do
-            todo_line=$(sed -n "${line_num}p" "$TODO_FILE")
-            echo "$display_num: $todo_line"
-            display_num=$((display_num+1))
-        done <<< "$line_nums"
+        # If todos found, display them
+        if [ -n "$line_nums" ]; then
+            # Read the file line by line
+            while IFS= read -r line_num; do
+                todo_line=$(sed -n "${line_num}p" "$TODO_FILE")
+                format_todo_display "$todo_line" "$display_num"
+                display_num=$((display_num+1))
+            done <<< "$line_nums"
+            
+            # Show a short stats summary
+            echo ""
+            total=$(grep -c -- "^- \[[x ]\]" "$TODO_FILE")
+            completed=$(grep -c -- "^- \[x\]" "$TODO_FILE")
+            pending=$((total - completed))
+            echo -e "${GRAY}Total: $total | ${GREEN}Done: $completed${NC} | ${YELLOW}Pending: $pending${NC}${GRAY}${NC}"
+        else
+            # No todos found
+            echo -e "${YELLOW}No todos found. Add one with:${NC} todo \"Your task\""
+        fi
     elif [ "$1" = "done" ]; then
         # Mark a todo as done
         if [ -z "$2" ]; then
             echo ""
-            echo "Error: Please specify the number of the todo to mark as done."
+            echo -e "${RED}Error: Please specify the number of the todo to mark as done.${NC}"
             echo "Usage: todo done <number>"
             exit 1
         fi
@@ -113,7 +388,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
  
         if [ -z "$actual_line" ]; then
             echo ""
-            echo "Error: Todo #$2 does not exist."
+            echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
  
@@ -123,7 +398,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Check if it's already done
         if [[ "$current_line" == *"- [x]"* ]]; then
             echo ""
-            echo "Error: Todo #$2 is already marked as done."
+            echo -e "${YELLOW}Todo #$2 is already marked as done.${NC}"
             exit 1
         fi
  
@@ -143,10 +418,12 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         if [ -s "$TODO_FILE.tmp" ]; then
             mv "$TODO_FILE.tmp" "$TODO_FILE"
             echo ""
-            echo "Marked todo #$2 as done!"
+            echo -e "${GREEN}Marked todo #$2 as done!${NC}"
+            # Display the marked todo
+            format_todo_display "$new_line" "$2"
         else
             echo ""
-            echo "Error: Something went wrong while updating the file."
+            echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
             rm "$TODO_FILE.tmp"
             exit 1
         fi
@@ -154,7 +431,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Mark a completed todo as not done
         if [ -z "$2" ]; then
             echo ""
-            echo "Error: Please specify the number of the todo to undo."
+            echo -e "${RED}Error: Please specify the number of the todo to undo.${NC}"
             echo "Usage: todo undo <number>"
             exit 1
         fi
@@ -176,7 +453,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
  
         if [ -z "$actual_line" ]; then
             echo ""
-            echo "Error: Todo #$2 does not exist."
+            echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
  
@@ -186,7 +463,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Check if it's not done yet
         if [[ "$current_line" != *"- [x]"* ]]; then
             echo ""
-            echo "Error: Todo #$2 is not marked as done."
+            echo -e "${YELLOW}Todo #$2 is not marked as done.${NC}"
             exit 1
         fi
  
@@ -206,10 +483,12 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         if [ -s "$TODO_FILE.tmp" ]; then
             mv "$TODO_FILE.tmp" "$TODO_FILE"
             echo ""
-            echo "Marked todo #$2 as not done!"
+            echo -e "${BLUE}Marked todo #$2 as not done.${NC}"
+            # Display the unmarked todo
+            format_todo_display "$new_line" "$2"
         else
             echo ""
-            echo "Error: Something went wrong while updating the file."
+            echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
             rm "$TODO_FILE.tmp"
             exit 1
         fi
@@ -217,7 +496,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Remove a todo item
         if [ -z "$2" ]; then
             echo ""
-            echo "Error: Please specify the number of the todo to remove."
+            echo -e "${RED}Error: Please specify the number of the todo to remove.${NC}"
             echo "Usage: todo remove <number>"
             exit 1
         fi
@@ -228,7 +507,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Check if there are any todos
         if [ -z "$line_nums" ]; then
             echo ""
-            echo "Error: No todos found in the file."
+            echo -e "${RED}Error: No todos found in the file.${NC}"
             exit 1
         fi
  
@@ -246,7 +525,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
  
         if [ -z "$actual_line" ]; then
             echo ""
-            echo "Error: Todo #$2 does not exist."
+            echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
  
@@ -275,10 +554,10 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
                 mv "$TODO_FILE.tmp" "$TODO_FILE"
             fi
             echo ""
-            echo "Removed todo: ${task#*]} "
+            echo -e "${YELLOW}Removed todo:${NC} ${task#*]} "
         else
             echo ""
-            echo "Error: Something went wrong while updating the file."
+            echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
             [ -f "$TODO_FILE.tmp" ] && rm "$TODO_FILE.tmp"
             exit 1
         fi
@@ -287,6 +566,15 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Make a backup of the file
         cp "$TODO_FILE" "${TODO_FILE}.bak"
  
+        # Count completed tasks before removing
+        completed_count=$(grep -c -- "- \[x\]" "$TODO_FILE")
+        
+        if [ "$completed_count" -eq 0 ]; then
+            echo ""
+            echo -e "${YELLOW}No completed tasks to clear.${NC}"
+            exit 0
+        fi
+        
         # Remove all lines with "[x]"
         grep -v -- "- \[x\]" "$TODO_FILE" > "${TODO_FILE}.tmp"
  
@@ -294,18 +582,18 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         if [ -s "${TODO_FILE}.tmp" ]; then
             mv "${TODO_FILE}.tmp" "$TODO_FILE"
             echo ""
-            echo "Cleared all completed tasks!"
+            echo -e "${GREEN}Cleared $completed_count completed tasks!${NC}"
         else
             echo ""
-            echo "Warning: All tasks were marked as completed. File remains unchanged."
+            echo -e "${YELLOW}Warning: All tasks were marked as completed. File remains unchanged.${NC}"
             rm "${TODO_FILE}.tmp"
         fi
     elif [ "$1" = "edit" ]; then
         # Edit an existing todo
         if [ -z "$2" ]; then
             echo ""
-            echo "Error: Please specify the number of the todo to edit."
-            echo "Usage: todo edit <number> <new description>"
+            echo -e "${RED}Error: Please specify the number of the todo to edit.${NC}"
+            echo "Usage: todo edit <number> [new description]"
             exit 1
         fi
  
@@ -326,7 +614,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
  
         if [ -z "$actual_line" ]; then
             echo ""
-            echo "Error: Todo #$2 does not exist."
+            echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
  
@@ -339,7 +627,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             # Trim potential leading space
             old_description="${old_description# }"
             echo ""
-            echo "Current task: $old_description"
+            echo -e "Current task: ${CYAN}$old_description${NC}"
             echo -n "New description: "
             read -r new_description
  
@@ -347,7 +635,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             if [ -z "$new_description" ]; then
                 new_description="$old_description"
                 echo ""
-                echo "No changes made to todo #$2."
+                echo -e "${YELLOW}No changes made to todo #$2.${NC}"
                 exit 0
             fi
         else
@@ -377,10 +665,12 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         if [ -s "$TODO_FILE.tmp" ]; then
             mv "$TODO_FILE.tmp" "$TODO_FILE"
             echo ""
-            echo "Updated todo #$2!"
+            echo -e "${GREEN}Updated todo #$2!${NC}"
+            # Display the updated todo
+            format_todo_display "$new_line" "$2"
         else
             echo ""
-            echo "Error: Something went wrong while updating the file."
+            echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
             rm "$TODO_FILE.tmp"
             exit 1
         fi
@@ -388,7 +678,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Set the todo file location
         if [ -z "$2" ]; then
             echo ""
-            echo "Current todo file: $TODO_FILE"
+            echo -e "Current todo file: ${CYAN}$TODO_FILE${NC}"
             echo "Usage: todo config <path>"
             exit 0
         fi
@@ -400,7 +690,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         if [ -d "$NEW_TODO_FILE" ]; then
             NEW_TODO_FILE="${NEW_TODO_FILE%/}/todos.md"
             echo ""
-            echo "Notice: Path is a directory. Using $NEW_TODO_FILE as the todo file."
+            echo -e "${YELLOW}Notice: Path is a directory. Using $NEW_TODO_FILE as the todo file.${NC}"
         fi
  
         # Store the new path in config
@@ -413,27 +703,165 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         create_todo_file
  
         echo ""
-        echo "Todo file location updated to: $TODO_FILE"
+        echo -e "${GREEN}Todo file location updated to:${NC} $TODO_FILE"
     elif [ "$1" = "help" ]; then
         # Show help
         show_usage
+    elif [ "$1" = "search" ]; then
+        # Search for todos containing a specific term
+        if [ -z "$2" ]; then
+            echo ""
+            echo -e "${RED}Error: Please specify a search term.${NC}"
+            echo "Usage: todo search <term>"
+            exit 1
+        fi
+        
+        # Shift to get all search terms
+        shift
+        search_term="$*"
+        
+        echo ""
+        echo -e "${BOLD}Search results for:${NC} ${CYAN}$search_term${NC}"
+        echo ""
+        
+        # Get all todo lines that match the search term
+        matching_lines=$(grep -n -i -- "$search_term" "$TODO_FILE" | grep -- "- \[" | cut -d: -f1)
+        
+        # Counter for displayed numbers
+        display_num=1
+        found=0
+        
+        # Read the file line by line
+        while IFS= read -r line_num; do
+            todo_line=$(sed -n "${line_num}p" "$TODO_FILE")
+            format_todo_display "$todo_line" "$display_num"
+            display_num=$((display_num+1))
+            found=1
+        done <<< "$matching_lines"
+        
+        if [ $found -eq 0 ]; then
+            echo -e "${YELLOW}No matching todos found.${NC}"
+        fi
+    elif [ "$1" = "stats" ]; then
+        # Show statistics about todos
+        show_stats
     fi
 else
     # Add new todo item
-    # Either this is not a command or it's a command with incorrect args
-    # In either case, treat it as a todo description
- 
-    # Combine all arguments into a single task description
+    # Process arguments for any flags
     task_description=""
-    for arg in "$@"; do
-        task_description="$task_description $arg"
+    priority=""
+    due_date=""
+    category=""
+    
+    i=1
+    while [ $i -le $# ]; do
+        eval arg=\${$i}
+        
+        case "$arg" in
+            -p|--priority)
+                i=$((i+1))
+                eval priority_level=\${$i}
+                if [ -z "$priority_level" ] || ! in_array "$priority_level" "high" "medium" "low"; then
+                    echo ""
+                    echo -e "${RED}Error: Invalid priority level. Use high, medium, or low.${NC}"
+                    exit 1
+                fi
+                priority="(${priority_level})"
+                ;;
+            -d|--due)
+                i=$((i+1))
+                eval date_str=\${$i}
+                due_date=$(parse_date "$date_str")
+                due_date="(due: $due_date)"
+                ;;
+            -c|--category)
+                i=$((i+1))
+                eval cat_name=\${$i}
+                if [[ ! "$cat_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+                    echo ""
+                    echo -e "${RED}Error: Category can only contain letters, numbers, underscores, and hyphens.${NC}"
+                    exit 1
+                fi
+                category="#$cat_name"
+                ;;
+            -*)
+                echo ""
+                echo -e "${RED}Error: Unknown option $arg${NC}"
+                show_usage
+                exit 1
+                ;;
+            *)
+                if [ -z "$task_description" ]; then
+                    task_description="$arg"
+                else
+                    task_description="$task_description $arg"
+                fi
+                ;;
+        esac
+        
+        i=$((i+1))
     done
- 
-    # Trim leading space
-    task_description="${task_description:1}"
- 
+    
+    # Combine metadata with the task description
+    full_description="$task_description"
+    
+    # Add priority if specified
+    if [ -n "$priority" ]; then
+        full_description="$full_description $priority"
+    fi
+    
+    # Add due date if specified
+    if [ -n "$due_date" ]; then
+        full_description="$full_description $due_date"
+    fi
+    
+    # Add category if specified
+    if [ -n "$category" ]; then
+        full_description="$full_description $category"
+    fi
+    
     # Add the new todo with checkbox to the file
-    echo "- [ ] $task_description" >> "$TODO_FILE"
-    echo ""
-    echo "Added todo: $task_description"
+    if [ -n "$full_description" ]; then
+        echo "- [ ] $full_description" >> "$TODO_FILE"
+        echo ""
+        echo -e "${GREEN}Added todo:${NC}"
+        
+        # Display newly added todo in a simple format with metadata on the same line
+        echo -ne "${BOLD}*${NC} [ ] ${task_description}"
+        
+        # Create metadata string with commas
+        metadata=""
+        if [ -n "$priority" ]; then
+            metadata="${RED}${priority//[()]/}${NC}"
+        fi
+        
+        if [ -n "$due_date" ]; then
+            if [ -n "$metadata" ]; then
+                metadata="${metadata}, ${PURPLE}DUE: $(echo "$due_date" | sed 's/due: //' | sed 's/[()]//g')${NC}"
+            else
+                metadata="${PURPLE}DUE: $(echo "$due_date" | sed 's/due: //' | sed 's/[()]//g')${NC}"
+            fi
+        fi
+        
+        if [ -n "$category" ]; then
+            if [ -n "$metadata" ]; then
+                metadata="${metadata}, ${CYAN}${category}${NC}"
+            else
+                metadata="${CYAN}${category}${NC}"
+            fi
+        fi
+        
+        # Print metadata if any exists
+        if [ -n "$metadata" ]; then
+            echo -e " ${metadata}"
+        else
+            echo ""
+        fi
+    else
+        echo ""
+        echo -e "${RED}Error: No task description provided.${NC}"
+        show_usage
+        exit 1
+    fi
 fi
