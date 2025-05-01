@@ -101,6 +101,19 @@ todo remove 3
 todo clear
 ```
 
+## These are aliases I use
+
+```bash
+alias todol="todo list"
+alias todod="todo done"
+alias todou="todo undo"
+alias todor="todo remove"
+alias todos="todo search"
+alias todoe="todo edit"
+alias todoc="todo clear"
+alias todoh="todo help"
+```
+
 ## Todo Format
 
 Todos are stored in markdown format:
