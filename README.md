@@ -9,7 +9,7 @@ A simple command-line tool for managing your todos in markdown format. Seamlessl
 ## Features
 
 - Manage your todos directly from the command line
-- Store todos in a standard markdown file with checkbox syntax (`- [ ]`)
+- Store todos in a standard markdown file with checkbox syntax `- [ ]`
 - Mark todos as done/undone with simple commands
 - Edit, remove, and clear completed todos
 - Set priority levels (high, medium, low) for tasks
