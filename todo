@@ -153,7 +153,7 @@ format_date_display() {
         tomorrow=$(date -v+1d +%Y-%m-%d 2>/dev/null)
     fi
     
-    # If that failed too, try another BSD format
+    # If that failed too, try another BSD date format
     if [ -z "$tomorrow" ]; then
         tomorrow=$(date -j -v+1d +%Y-%m-%d 2>/dev/null)
     fi
@@ -305,7 +305,7 @@ show_stats() {
     echo ""
     
     echo -e "${BOLD}By Priority:${NC}"
-            echo -e "${GREEN}Completed: $completed${NC}, ${YELLOW}Pending: $pending${NC}, ${RED}High: $high${NC}, ${YELLOW}Medium: $medium${NC}, ${BLUE}Low: $low${NC}"
+    echo -e "${GREEN}Completed: $completed${NC}, ${YELLOW}Pending: $pending${NC}, ${RED}High: $high${NC}, ${YELLOW}Medium: $medium${NC}, ${BLUE}Low: $low${NC}"
     echo ""
     
     echo -e "${BOLD}Due Dates:${NC}"
@@ -402,17 +402,14 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             exit 1
         fi
  
-        # Replace [ ] with [x]
-        new_line=$(echo "$current_line" | sed 's/- \[ \]/- [x]/')
- 
-        # Double-check if replacement worked
-        if [ "$new_line" = "$current_line" ]; then
-            # Try another pattern
-            new_line=$(echo "$current_line" | sed 's/-\s*\[\s*\]/-\ [x]/')
-        fi
- 
-        # Create a temp file with the modification
-        sed "${actual_line}s/.*/${new_line}/" "$TODO_FILE" > "$TODO_FILE.tmp"
+        # Replace [ ] with [x] using a safer approach
+        # Use awk instead of sed to avoid delimiter conflicts
+        awk -v line_num="$actual_line" '
+        NR == line_num {
+            gsub(/- \[ \]/, "- [x]")
+        }
+        { print }
+        ' "$TODO_FILE" > "$TODO_FILE.tmp"
  
         # Check if the temp file has content before replacing
         if [ -s "$TODO_FILE.tmp" ]; then
@@ -420,11 +417,12 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo ""
             echo -e "${GREEN}Marked todo #$2 as done!${NC}"
             # Display the marked todo
+            new_line=$(sed -n "${actual_line}p" "$TODO_FILE")
             format_todo_display "$new_line" "$2"
         else
             echo ""
             echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
-            rm "$TODO_FILE.tmp"
+            rm -f "$TODO_FILE.tmp"
             exit 1
         fi
     elif [ "$1" = "undo" ]; then
@@ -467,17 +465,13 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             exit 1
         fi
  
-        # Replace [x] with [ ]
-        new_line=$(echo "$current_line" | sed 's/- \[x\]/- [ ]/')
- 
-        # Double-check if replacement worked
-        if [ "$new_line" = "$current_line" ]; then
-            # Try another pattern
-            new_line=$(echo "$current_line" | sed 's/-\s*\[x\]/-\ [ ]/')
-        fi
- 
-        # Create a temp file with the modification
-        sed "${actual_line}s/.*/${new_line}/" "$TODO_FILE" > "$TODO_FILE.tmp"
+        # Replace [x] with [ ] using awk to avoid delimiter conflicts
+        awk -v line_num="$actual_line" '
+        NR == line_num {
+            gsub(/- \[x\]/, "- [ ]")
+        }
+        { print }
+        ' "$TODO_FILE" > "$TODO_FILE.tmp"
  
         # Check if the temp file has content before replacing
         if [ -s "$TODO_FILE.tmp" ]; then
@@ -485,11 +479,12 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo ""
             echo -e "${BLUE}Marked todo #$2 as not done.${NC}"
             # Display the unmarked todo
+            new_line=$(sed -n "${actual_line}p" "$TODO_FILE")
             format_todo_display "$new_line" "$2"
         else
             echo ""
             echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
-            rm "$TODO_FILE.tmp"
+            rm -f "$TODO_FILE.tmp"
             exit 1
         fi
     elif [ "$1" = "remove" ]; then
@@ -658,8 +653,11 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Create the new line
         new_line="$checkbox $new_description"
  
-        # Create a temp file with the modification
-        sed "${actual_line}s/.*/${new_line}/" "$TODO_FILE" > "$TODO_FILE.tmp"
+        # Use awk to avoid sed delimiter issues
+        awk -v line_num="$actual_line" -v new_content="$new_line" '
+        NR == line_num { print new_content; next }
+        { print }
+        ' "$TODO_FILE" > "$TODO_FILE.tmp"
  
         # Check if the temp file has content before replacing
         if [ -s "$TODO_FILE.tmp" ]; then
@@ -671,7 +669,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         else
             echo ""
             echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
-            rm "$TODO_FILE.tmp"
+            rm -f "$TODO_FILE.tmp"
             exit 1
         fi
     elif [ "$1" = "config" ]; then
