@@ -6,6 +6,28 @@
 
 A simple command-line tool for managing your todos in markdown format. Seamlessly integrates with Obsidian and other markdown editors.
 
+<!-- vim-markdown-toc GFM -->
+
+* [Features](#features)
+* [Installation](#installation)
+* [Usage](#usage)
+* [Examples](#examples)
+* [These are aliases I use](#these-are-aliases-i-use)
+* [Todo Format](#todo-format)
+* [Use with Obsidian for Best Experience](#use-with-obsidian-for-best-experience)
+* [Configuration](#configuration)
+* [Server Sync Setup (Optional)](#server-sync-setup-optional)
+    * [Server Setup](#server-setup)
+    * [Adding Additional Computers](#adding-additional-computers)
+    * [Manual Sync Control](#manual-sync-control)
+    * [How Sync Works](#how-sync-works)
+    * [Sync Commands](#sync-commands)
+    * [Workflow Examples](#workflow-examples)
+* [Requirements](#requirements)
+* [License](#license)
+
+<!-- vim-markdown-toc -->
+
 ## Features
 
 - Manage your todos directly from the command line
