@@ -186,6 +186,7 @@ sudo chown todouser:todouser /home/todouser/todos
 ```bash
 # On your client machine(s)
 ssh-keygen -t ed25519 -f ~/.ssh/todouser_key -C "todo-sync"
+# Press Enter when asked for passphrase (no passphrase needed for automation)
 
 # Copy public key to server
 ssh-copy-id -i ~/.ssh/todouser_key todouser@your-server-ip
@@ -203,6 +204,40 @@ ssh -i ~/.ssh/todouser_key todouser@your-server-ip
 # Remote path: /home/todouser/todos/todos.md
 # SSH key path: ~/.ssh/todouser_key
 ```
+
+### Adding Additional Computers
+
+**To set up sync on your second/third/etc. computer:**
+
+```bash
+# 1. Install todo CLI on the new computer
+git clone https://github.com/your-username/todo-cli.git
+cp todo-cli/todo ~/.local/bin/ && chmod +x ~/.local/bin/todo
+
+# 2. Generate a new SSH key (each computer gets its own key)
+ssh-keygen -t ed25519 -f ~/.ssh/todouser_key -C "todo-sync-computer2"
+# Press Enter for no passphrase
+
+# 3. Add this new key to your server (adds to existing keys)
+ssh-copy-id -i ~/.ssh/todouser_key todouser@your-server-ip
+
+# 4. Test the connection
+ssh -i ~/.ssh/todouser_key todouser@your-server-ip
+# Should work without password
+
+# 5. Configure sync (use same server details as first computer)
+./todo sync-setup
+# Server hostname: your-server-ip
+# Username: todouser
+# Remote path: /home/todouser/todos/todos.md
+# SSH key path: ~/.ssh/todouser_key
+
+# 6. Get your existing todos
+./todo list
+# Downloads all your existing todos from server
+```
+
+**Note:** Each computer uses its own SSH key for security. The server accepts multiple keys, so all your devices can sync to the same todo file.
 
 ### How Sync Works
 
