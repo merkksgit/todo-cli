@@ -18,6 +18,8 @@ A simple command-line tool for managing your todos in markdown format. Seamlessl
 - Search for specific todos
 - View statistics about your tasks
 - Configure where your todo list is stored
+- **Multi-device sync** with smart conflict resolution via your own server
+- **Obsidian integration** - edits sync seamlessly between CLI and GUI
 - Color-coded terminal output for better readability
 - Lightweight, fast, and works on any Unix-like system
 
@@ -161,10 +163,90 @@ todo config ~/Obsidian/Work/todos.md
 
 The configuration is stored in ~/.todo_config, which is a simple text file containing the full path to your todo file. This allows your todo file location to persist between sessions.
 
+## Server Sync Setup (Optional)
+
+Todo CLI supports automatic synchronization across multiple devices using your own server (e.g., Proxmox, VPS, Raspberry Pi).
+
+### Server Setup
+
+**1. Create a dedicated user on your server:**
+
+```bash
+# On your server
+sudo useradd -m -s /bin/bash todouser
+sudo passwd todouser
+
+# Create sync directory
+sudo mkdir -p /home/todouser/todos
+sudo chown todouser:todouser /home/todouser/todos
+```
+
+**2. Set up SSH key authentication:**
+
+```bash
+# On your client machine(s)
+ssh-keygen -t ed25519 -f ~/.ssh/todouser_key -C "todo-sync"
+
+# Copy public key to server
+ssh-copy-id -i ~/.ssh/todouser_key todouser@your-server-ip
+
+# Test connection (should work without password)
+ssh -i ~/.ssh/todouser_key todouser@your-server-ip
+```
+
+**3. Configure sync on your client:**
+
+```bash
+./todo sync-setup
+# Server hostname or IP: your-server-ip
+# Username: todouser
+# Remote path: /home/todouser/todos/todos.md
+# SSH key path: ~/.ssh/todouser_key
+```
+
+### How Sync Works
+
+- **Smart Conflict Resolution**: Only syncs when needed based on file timestamps
+- **Automatic Sync**: All todo operations automatically sync to server
+- **Obsidian Integration**: Edit in Obsidian, changes sync seamlessly
+- **Multi-Device**: All devices stay in sync automatically
+
+### Sync Commands
+
+```bash
+todo sync-setup    # One-time setup
+todo sync          # Manual bi-directional sync
+todo sync-up       # Upload to server only
+todo sync-down     # Download from server only
+```
+
+### Workflow Examples
+
+```bash
+# Device A: Add todos via CLI
+./todo "Buy groceries" -p high
+# → Automatically syncs to server
+
+# Device B: View todos (gets Device A's changes)
+./todo list
+# → Smart sync pulls updates from server
+
+# Edit in Obsidian on any device
+# → Next ./todo list automatically pushes changes to server
+
+# Device C: Mark item done
+./todo done 1
+# → Automatically syncs to server
+
+# All devices: ./todo list
+# → Everyone sees the completed item
+```
+
 ## Requirements
 
 - Bash
 - Core Unix utilities (grep, sed, etc.)
+- **For sync**: rsync, ssh (usually pre-installed)
 
 ## License
 

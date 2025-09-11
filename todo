@@ -3,6 +3,7 @@
 # Default configuration
 DEFAULT_TODO_FILE="$HOME/todos.md"
 CONFIG_FILE="$HOME/.todo_config"
+SYNC_CONFIG_FILE="$HOME/.todo_sync_config"
 
 # Terminal colors
 RED='\033[0;31m'
@@ -23,6 +24,12 @@ else
     echo "$TODO_FILE" > "$CONFIG_FILE"
     echo ""
     echo "Using default todo file: $TODO_FILE"
+fi
+
+# Load sync configuration if exists
+SYNC_ENABLED=false
+if [ -f "$SYNC_CONFIG_FILE" ]; then
+    source "$SYNC_CONFIG_FILE"
 fi
 
 # Create todo file if it doesn't exist
@@ -69,6 +76,10 @@ show_usage() {
     echo "  todo search <term>              - Search for todos containing term"
     echo "  todo stats                      - Show todo statistics"
     echo "  todo config <path>              - Set the location of the todo file"
+    echo "  todo sync-setup                 - Configure server sync settings"
+    echo "  todo sync                       - Sync with server (bi-directional)"
+    echo "  todo sync-up                    - Upload todos to server"
+    echo "  todo sync-down                  - Download todos from server"
     echo "  todo help                       - Show this help message"
 }
 
@@ -267,6 +278,113 @@ format_todo_display() {
     printf "\n"
 }
 
+# Sync utility functions
+is_sync_enabled() {
+    [ "$SYNC_ENABLED" = "true" ] && command -v rsync >/dev/null 2>&1
+}
+
+sync_to_server() {
+    if ! is_sync_enabled; then
+        return 1
+    fi
+    
+    if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_PATH" ] || [ -z "$SSH_KEY_PATH" ]; then
+        echo "Error: Incomplete sync configuration. Run 'todo sync-setup' first."
+        return 1
+    fi
+    
+    echo "Syncing to server..."
+    # Expand tilde in SSH key path
+    ssh_key_expanded=$(eval echo "$SSH_KEY_PATH")
+    
+    # Capture rsync output and error code
+    rsync_output=$(rsync -avz --mkpath -e "ssh -i \"$ssh_key_expanded\"" "$TODO_FILE" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH" 2>&1)
+    rsync_exit_code=$?
+    
+    if [ $rsync_exit_code -eq 0 ]; then
+        echo "✓ Synced to server"
+        return 0
+    else
+        echo "✗ Sync failed: $rsync_output"
+        return 1
+    fi
+}
+
+sync_from_server() {
+    if ! is_sync_enabled; then
+        return 1
+    fi
+    
+    if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_PATH" ] || [ -z "$SSH_KEY_PATH" ]; then
+        echo "Error: Incomplete sync configuration. Run 'todo sync-setup' first."
+        return 1
+    fi
+    
+    echo "Syncing from server..."
+    # Expand tilde in SSH key path
+    ssh_key_expanded=$(eval echo "$SSH_KEY_PATH")
+    
+    # Capture rsync output and error code
+    rsync_output=$(rsync -avz -e "ssh -i \"$ssh_key_expanded\"" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH" "$TODO_FILE" 2>&1)
+    rsync_exit_code=$?
+    
+    if [ $rsync_exit_code -eq 0 ]; then
+        echo "✓ Synced from server"
+        return 0
+    else
+        echo "✗ Sync from server failed: $rsync_output"
+        return 1
+    fi
+}
+
+try_auto_sync() {
+    if is_sync_enabled && [ "$AUTO_SYNC" = "true" ]; then
+        sync_to_server >/dev/null 2>&1
+    fi
+}
+
+# Get file modification timestamp
+get_local_timestamp() {
+    if [ -f "$TODO_FILE" ]; then
+        stat -c %Y "$TODO_FILE" 2>/dev/null || stat -f %m "$TODO_FILE" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+get_remote_timestamp() {
+    if ! is_sync_enabled; then
+        echo "0"
+        return
+    fi
+    
+    if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_PATH" ] || [ -z "$SSH_KEY_PATH" ]; then
+        echo "0"
+        return
+    fi
+    
+    ssh_key_expanded=$(eval echo "$SSH_KEY_PATH")
+    ssh -i "$ssh_key_expanded" -o ConnectTimeout=5 "$SERVER_USER@$SERVER_HOST" "if [ -f '$SERVER_PATH' ]; then stat -c %Y '$SERVER_PATH' 2>/dev/null || stat -f %m '$SERVER_PATH' 2>/dev/null; else echo '0'; fi" 2>/dev/null || echo "0"
+}
+
+# Smart sync that only pulls if server is newer, and pushes if local is newer
+smart_sync() {
+    if ! is_sync_enabled || [ "$AUTO_SYNC" != "true" ]; then
+        return 0
+    fi
+    
+    local_timestamp=$(get_local_timestamp)
+    remote_timestamp=$(get_remote_timestamp)
+    
+    # If remote is newer than local, sync down
+    if [ "$remote_timestamp" -gt "$local_timestamp" ]; then
+        sync_from_server >/dev/null 2>&1
+    # If local is newer than remote, sync up  
+    elif [ "$local_timestamp" -gt "$remote_timestamp" ]; then
+        sync_to_server >/dev/null 2>&1
+    fi
+}
+
 # Function to show statistics about todos
 show_stats() {
     echo ""
@@ -323,15 +441,18 @@ show_stats() {
 }
 
 # Reserved commands that can't be used in todo descriptions without quotes
-COMMANDS=("list" "done" "undo" "remove" "clear" "edit" "config" "help" "search" "stats")
+COMMANDS=("list" "done" "undo" "remove" "clear" "edit" "config" "help" "search" "stats" "sync" "sync-up" "sync-down" "sync-setup")
 
 # Handle commands
 if [ $# -eq 0 ]; then
     # No arguments provided, show usage
     show_usage
-elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ "$1" = "clear" ] || [ "$1" = "help" ] || [ "$1" = "stats" ] || { [ "$1" = "search" ] && [ $# -ge 2 ]; } || { [ "$1" = "done" ] && [ $# -eq 2 ]; } || { [ "$1" = "undo" ] && [ $# -eq 2 ]; } || { [ "$1" = "remove" ] && [ $# -eq 2 ]; } || { [ "$1" = "edit" ] && [ $# -ge 2 ]; } || { [ "$1" = "config" ] && [ $# -le 2 ]; }; }; then
+elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ "$1" = "clear" ] || [ "$1" = "help" ] || [ "$1" = "stats" ] || [ "$1" = "sync" ] || [ "$1" = "sync-up" ] || [ "$1" = "sync-down" ] || [ "$1" = "sync-setup" ] || { [ "$1" = "search" ] && [ $# -ge 2 ]; } || { [ "$1" = "done" ] && [ $# -eq 2 ]; } || { [ "$1" = "undo" ] && [ $# -eq 2 ]; } || { [ "$1" = "remove" ] && [ $# -eq 2 ]; } || { [ "$1" = "edit" ] && [ $# -ge 2 ]; } || { [ "$1" = "config" ] && [ $# -le 2 ]; }; }; then
     # This is a command with correct number of arguments
     if [ "$1" = "list" ]; then
+        # Smart sync: pull if server newer, push if local newer
+        smart_sync
+        
         # List all todos with line numbers
         echo ""
         echo -e "${BOLD}# Todo List${NC}"
@@ -419,6 +540,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             # Display the marked todo
             new_line=$(sed -n "${actual_line}p" "$TODO_FILE")
             format_todo_display "$new_line" "$2"
+            try_auto_sync
         else
             echo ""
             echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
@@ -481,6 +603,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             # Display the unmarked todo
             new_line=$(sed -n "${actual_line}p" "$TODO_FILE")
             format_todo_display "$new_line" "$2"
+            try_auto_sync
         else
             echo ""
             echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
@@ -550,6 +673,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             fi
             echo ""
             echo -e "${YELLOW}Removed todo:${NC} ${task#*]} "
+            try_auto_sync
         else
             echo ""
             echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
@@ -578,6 +702,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             mv "${TODO_FILE}.tmp" "$TODO_FILE"
             echo ""
             echo -e "${GREEN}Cleared $completed_count completed tasks!${NC}"
+            try_auto_sync
         else
             echo ""
             echo -e "${YELLOW}Warning: All tasks were marked as completed. File remains unchanged.${NC}"
@@ -666,6 +791,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo -e "${GREEN}Updated todo #$2!${NC}"
             # Display the updated todo
             format_todo_display "$new_line" "$2"
+            try_auto_sync
         else
             echo ""
             echo -e "${RED}Error: Something went wrong while updating the file.${NC}"
@@ -743,6 +869,84 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
     elif [ "$1" = "stats" ]; then
         # Show statistics about todos
         show_stats
+    elif [ "$1" = "sync-setup" ]; then
+        # Setup sync configuration
+        echo ""
+        echo -e "${BOLD}Todo Sync Setup${NC}"
+        echo ""
+        
+        # Get server details
+        read -p "Server hostname or IP: " server_host
+        read -p "Username: " server_user
+        read -p "Remote path (e.g., /home/user/todos.md): " server_path
+        read -p "SSH key path (default: ~/.ssh/id_rsa): " ssh_key_path
+        
+        # Use default if empty
+        if [ -z "$ssh_key_path" ]; then
+            ssh_key_path="~/.ssh/id_rsa"
+        fi
+        
+        # Create sync config file
+        cat > "$SYNC_CONFIG_FILE" << EOF
+SYNC_ENABLED=true
+AUTO_SYNC=true
+SERVER_HOST="$server_host"
+SERVER_USER="$server_user"
+SERVER_PATH="$server_path"
+SSH_KEY_PATH="$ssh_key_path"
+EOF
+        
+        echo ""
+        echo -e "${GREEN}✓ Sync configuration saved to $SYNC_CONFIG_FILE${NC}"
+        echo ""
+        echo "Testing connection..."
+        
+        # Test the connection
+        ssh_key_expanded=$(eval echo "$ssh_key_path")
+        if ssh -i "$ssh_key_expanded" "$server_user@$server_host" "mkdir -p $(dirname "$server_path")" 2>/dev/null; then
+            echo -e "${GREEN}✓ Connection successful!${NC}"
+            
+            # Do initial sync
+            echo ""
+            echo "Performing initial sync..."
+            source "$SYNC_CONFIG_FILE"
+            sync_to_server
+        else
+            echo -e "${YELLOW}⚠ Warning: Could not connect to server. Please check your settings.${NC}"
+            echo "You can test manually with: ssh $server_user@$server_host"
+        fi
+    elif [ "$1" = "sync" ]; then
+        # Bidirectional sync
+        if ! is_sync_enabled; then
+            echo ""
+            echo -e "${YELLOW}Sync not configured. Run 'todo sync-setup' first.${NC}"
+            exit 1
+        fi
+        
+        echo ""
+        echo "Syncing with server..."
+        sync_from_server
+        sync_to_server
+    elif [ "$1" = "sync-up" ]; then
+        # Upload to server
+        if ! is_sync_enabled; then
+            echo ""
+            echo -e "${YELLOW}Sync not configured. Run 'todo sync-setup' first.${NC}"
+            exit 1
+        fi
+        
+        echo ""
+        sync_to_server
+    elif [ "$1" = "sync-down" ]; then
+        # Download from server
+        if ! is_sync_enabled; then
+            echo ""
+            echo -e "${YELLOW}Sync not configured. Run 'todo sync-setup' first.${NC}"
+            exit 1
+        fi
+        
+        echo ""
+        sync_from_server
     fi
 else
     # Add new todo item
@@ -856,6 +1060,7 @@ else
         else
             echo ""
         fi
+        try_auto_sync
     else
         echo ""
         echo -e "${RED}Error: No task description provided.${NC}"
