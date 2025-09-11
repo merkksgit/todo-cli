@@ -60,6 +60,12 @@ COMMANDS:
   todo search <term>              - Search for todos containing term
   todo stats                      - Show todo statistics
   todo config <path>              - Set the location of the todo file
+  todo sync-setup                 - Configure server sync settings
+  todo sync                       - Sync with server (bi-directional)
+  todo sync-up                    - Upload todos to server
+  todo sync-down                  - Download todos from server
+  todo offline                    - Switch to offline mode (disable sync)
+  todo online                     - Switch to online mode (enable sync)
   todo help                       - Show this help message
 ```
 
@@ -239,8 +245,46 @@ ssh -i ~/.ssh/todouser_key todouser@your-server-ip
 
 **Note:** Each computer uses its own SSH key for security. The server accepts multiple keys, so all your devices can sync to the same todo file.
 
+### Manual Sync Control
+
+Todo CLI gives you full control over when sync happens for optimal performance. When your server is offline or unreachable, SSH connection attempts cause significant delays (2-3 seconds per command). The offline mode prevents these SSH checks entirely, ensuring instant performance even when your server is down.
+
+**Offline Mode (Default for new users):**
+
+```bash
+todo offline              # Disable sync for maximum speed
+todo list                 # Instant response (~0.01s)
+todo "new task"           # Add tasks instantly
+```
+
+**Online Mode (When you want to sync):**
+
+```bash
+todo online               # Enable sync
+todo list                 # Syncs with server then lists todos
+todo "sync this task"     # Adds task and syncs to server
+```
+
+**Mixed Workflow (Recommended):**
+
+```bash
+# Daily fast usage
+todo offline
+todo "task 1"
+todo "task 2"
+todo list                 # All instant
+
+# When ready to sync
+todo online
+todo list                 # Syncs all changes with server
+todo offline              # Back to fast mode
+```
+
+Your mode preference is saved and remembered between sessions.
+
 ### How Sync Works
 
+- **Manual Control**: Choose when sync happens vs when you want speed
 - **Smart Conflict Resolution**: Only syncs when needed based on file timestamps
 - **Automatic Sync**: All todo operations automatically sync to server
 - **Obsidian Integration**: Edit in Obsidian, changes sync seamlessly
@@ -250,31 +294,41 @@ ssh -i ~/.ssh/todouser_key todouser@your-server-ip
 
 ```bash
 todo sync-setup    # One-time setup
+todo online        # Enable sync mode
 todo sync          # Manual bi-directional sync
 todo sync-up       # Upload to server only
 todo sync-down     # Download from server only
+todo offline       # Disable sync for fast local usage
 ```
 
 ### Workflow Examples
 
 ```bash
-# Device A: Add todos via CLI
-./todo "Buy groceries" -p high
-# → Automatically syncs to server
+# Device A: Fast daily usage
+./todo offline                    # Switch to offline mode
+./todo "Buy groceries" -p high    # Add tasks instantly
+./todo "Call dentist"             # No sync delays
+./todo list                       # Instant listing
 
-# Device B: View todos (gets Device A's changes)
-./todo list
-# → Smart sync pulls updates from server
+# When ready to sync changes
+./todo online                     # Enable sync
+./todo list                       # Syncs all changes to server
+
+# Device B: Get updates
+./todo online                     # Enable sync
+./todo list                       # Downloads Device A's changes
 
 # Edit in Obsidian on any device
-# → Next ./todo list automatically pushes changes to server
+# → Next './todo online && ./todo list' syncs changes
 
-# Device C: Mark item done
-./todo done 1
-# → Automatically syncs to server
+# Device C: Mixed workflow
+./todo online                     # Enable sync for session
+./todo done 1                     # Mark done, syncs to server
+./todo offline                    # Back to fast mode
+./todo "urgent task"              # Add without sync delay
 
-# All devices: ./todo list
-# → Everyone sees the completed item
+# Periodic sync across all devices
+./todo online && ./todo list      # Everyone gets latest changes
 ```
 
 ## Requirements
