@@ -66,6 +66,7 @@ COMMANDS:
   todo sync-down                  - Download todos from server
   todo offline                    - Switch to offline mode (disable sync)
   todo online                     - Switch to online mode (enable sync)
+  todo status                     - Show current sync mode and configuration
   todo help                       - Show this help message
 ```
 

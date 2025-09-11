@@ -144,6 +144,7 @@ show_usage() {
     echo "  todo sync-down                  - Download todos from server"
     echo "  todo offline                    - Switch to offline mode (disable sync)"
     echo "  todo online                     - Switch to online mode (enable sync)"
+    echo "  todo status                     - Show current sync mode and configuration"
     echo "  todo help                       - Show this help message"
 }
 
@@ -546,13 +547,13 @@ show_stats() {
 }
 
 # Reserved commands that can't be used in todo descriptions without quotes
-COMMANDS=("list" "done" "undo" "remove" "clear" "edit" "config" "help" "search" "stats" "sync" "sync-up" "sync-down" "sync-setup" "offline" "online")
+COMMANDS=("list" "done" "undo" "remove" "clear" "edit" "config" "help" "search" "stats" "sync" "sync-up" "sync-down" "sync-setup" "offline" "online" "status")
 
 # Handle commands
 if [ $# -eq 0 ]; then
     # No arguments provided, show usage
     show_usage
-elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ "$1" = "clear" ] || [ "$1" = "help" ] || [ "$1" = "stats" ] || [ "$1" = "sync" ] || [ "$1" = "sync-up" ] || [ "$1" = "sync-down" ] || [ "$1" = "sync-setup" ] || [ "$1" = "offline" ] || [ "$1" = "online" ] || { [ "$1" = "search" ] && [ $# -ge 2 ]; } || { [ "$1" = "done" ] && [ $# -eq 2 ]; } || { [ "$1" = "undo" ] && [ $# -eq 2 ]; } || { [ "$1" = "remove" ] && [ $# -eq 2 ]; } || { [ "$1" = "edit" ] && [ $# -ge 2 ]; } || { [ "$1" = "config" ] && [ $# -le 2 ]; }; }; then
+elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ "$1" = "clear" ] || [ "$1" = "help" ] || [ "$1" = "stats" ] || [ "$1" = "sync" ] || [ "$1" = "sync-up" ] || [ "$1" = "sync-down" ] || [ "$1" = "sync-setup" ] || [ "$1" = "offline" ] || [ "$1" = "online" ] || [ "$1" = "status" ] || { [ "$1" = "search" ] && [ $# -ge 2 ]; } || { [ "$1" = "done" ] && [ $# -eq 2 ]; } || { [ "$1" = "undo" ] && [ $# -eq 2 ]; } || { [ "$1" = "remove" ] && [ $# -eq 2 ]; } || { [ "$1" = "edit" ] && [ $# -ge 2 ]; } || { [ "$1" = "config" ] && [ $# -le 2 ]; }; }; then
     # This is a command with correct number of arguments
     if [ "$1" = "list" ]; then
         # Smart sync: pull if server newer, push if local newer
@@ -1090,6 +1091,62 @@ EOF
         echo ""
         echo -e "${GREEN}✓ Switched to online mode. Sync enabled.${NC}"
         echo "Use 'todo offline' to disable sync."
+    elif [ "$1" = "status" ]; then
+        # Show current sync status and configuration
+        echo ""
+        echo -e "${BOLD}Todo CLI Status${NC}"
+        echo ""
+        
+        # Check if sync is configured
+        if [ ! -f "$SYNC_CONFIG_FILE" ]; then
+            echo -e "${CYAN}Sync Mode:${NC} ${GREEN}Offline${NC} (no server configured)"
+            echo -e "${CYAN}Performance:${NC} Instant (~0.01s)"
+            echo ""
+            echo -e "To set up server sync, run: ${BOLD}todo sync-setup${NC}"
+        else
+            # Load current sync configuration
+            source "$SYNC_CONFIG_FILE"
+            
+            # Determine current mode
+            if [ "$SYNC_MODE" = "offline" ]; then
+                echo -e "${CYAN}Sync Mode:${NC} ${GREEN}Offline${NC}"
+                echo -e "${CYAN}Performance:${NC} Instant (~0.01s)"
+                echo ""
+                echo -e "Server sync is disabled. Run '${BOLD}todo online${NC}' to enable."
+            elif [ "$SYNC_MODE" = "online" ]; then
+                echo -e "${CYAN}Sync Mode:${NC} ${YELLOW}Online${NC}"
+                echo -e "${CYAN}Performance:${NC} ~2-3s (includes server sync)"
+                echo ""
+                echo -e "Server sync is enabled. Run '${BOLD}todo offline${NC}' for instant performance."
+            else
+                echo -e "${CYAN}Sync Mode:${NC} ${YELLOW}Auto${NC} (legacy setting)"
+                echo -e "${CYAN}Performance:${NC} ~2-3s (includes server sync)"
+                echo ""
+                echo -e "Run '${BOLD}todo offline${NC}' or '${BOLD}todo online${NC}' to set explicit mode."
+            fi
+            
+            echo ""
+            echo -e "${BOLD}Server Configuration:${NC}"
+            echo -e "${CYAN}Host:${NC} ${SERVER_HOST:-"Not set"}"
+            echo -e "${CYAN}User:${NC} ${SERVER_USER:-"Not set"}" 
+            echo -e "${CYAN}Path:${NC} ${SERVER_PATH:-"Not set"}"
+            echo -e "${CYAN}SSH Key:${NC} ${SSH_KEY_PATH:-"Not set"}"
+        fi
+        
+        echo ""
+        echo -e "${BOLD}Todo File:${NC} $TODO_FILE"
+        
+        # Check if todo file exists and show basic stats
+        if [ -f "$TODO_FILE" ]; then
+            total=$(grep -c -- "^- \\[[x ]\\]" "$TODO_FILE" 2>/dev/null)
+            [ -z "$total" ] && total=0
+            completed=$(grep -c -- "^- \\[x\\]" "$TODO_FILE" 2>/dev/null)
+            [ -z "$completed" ] && completed=0
+            pending=$((total - completed))
+            echo -e "${CYAN}Tasks:${NC} $total total, $completed completed, $pending pending"
+        else
+            echo -e "${CYAN}Tasks:${NC} No todo file found"
+        fi
     fi
 else
     # Add new todo item
