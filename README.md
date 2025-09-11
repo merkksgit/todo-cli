@@ -12,7 +12,7 @@ A simple command-line tool for managing your todos in markdown format. Seamlessl
 * [Installation](#installation)
 * [Usage](#usage)
 * [Examples](#examples)
-* [These are aliases I use](#these-are-aliases-i-use)
+* [Aliases I use](#aliases-i-use)
 * [Todo Format](#todo-format)
 * [Use with Obsidian for Best Experience](#use-with-obsidian-for-best-experience)
 * [Configuration](#configuration)
@@ -132,7 +132,7 @@ todo remove 3
 todo clear
 ```
 
-## These are aliases I use
+## Aliases I use
 
 ```bash
 alias todol="todo list"
