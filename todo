@@ -39,7 +39,7 @@ create_todo_file() {
     if [ ! -d "$TODO_DIR" ]; then
         mkdir -p "$TODO_DIR"
     fi
- 
+
     if [ ! -f "$TODO_FILE" ]; then
         # Create a properly formatted todo file with header
         echo "# Todo List" > "$TODO_FILE"
@@ -97,7 +97,7 @@ in_array() {
 parse_date() {
     local date_str="$1"
     local result=""
-    
+
     case "$date_str" in
         today)
             result=$(date +%Y-%m-%d)
@@ -105,12 +105,12 @@ parse_date() {
         tomorrow)
             # Try GNU date first
             result=$(date -d "+1 day" +%Y-%m-%d 2>/dev/null)
-            
+
             # If GNU date failed, try BSD date (macOS)
             if [ -z "$result" ]; then
                 result=$(date -v+1d +%Y-%m-%d 2>/dev/null)
             fi
-            
+
             # If that failed too, try another BSD date format
             if [ -z "$result" ]; then
                 result=$(date -j -v+1d +%Y-%m-%d 2>/dev/null)
@@ -130,12 +130,12 @@ parse_date() {
             else
                 # Try to parse using GNU date
                 result=$(date -d "$date_str" +%Y-%m-%d 2>/dev/null)
-                
+
                 # If that failed, try BSD date
                 if [ -z "$result" ]; then
                     result=$(date -j -f "%d-%m-%Y" "$date_str" +%Y-%m-%d 2>/dev/null)
                 fi
-                
+
                 # If all else fails
                 if [ -z "$result" ]; then
                     echo "Invalid date format. Please use DD-MM-YYYY, today, or tomorrow."
@@ -144,7 +144,7 @@ parse_date() {
             fi
             ;;
     esac
-    
+
     echo "$result"
 }
 
@@ -153,22 +153,22 @@ format_date_display() {
     local date_str="$1"
     local today
     local tomorrow
-    
+
     today=$(date +%Y-%m-%d)
-    
+
     # Try GNU date first for tomorrow
     tomorrow=$(date -d "+1 day" +%Y-%m-%d 2>/dev/null)
-    
+
     # If GNU date failed, try BSD date
     if [ -z "$tomorrow" ]; then
         tomorrow=$(date -v+1d +%Y-%m-%d 2>/dev/null)
     fi
-    
+
     # If that failed too, try another BSD date format
     if [ -z "$tomorrow" ]; then
         tomorrow=$(date -j -v+1d +%Y-%m-%d 2>/dev/null)
     fi
-    
+
     case "$date_str" in
         "$today")
             echo "Today"
@@ -200,7 +200,7 @@ format_todo_display() {
     local date_raw=""
     local date_display=""
     local cat_name=""
-    
+
     # Check if it's completed
     if [[ "$todo_line" == *"- [x]"* ]]; then
         status="${GREEN}✓${NC}"
@@ -209,10 +209,10 @@ format_todo_display() {
         status=" "
         task_color="${NC}"
     fi
-    
+
     # Extract the task text (everything after the checkbox)
     display_text="${todo_line#*]} "
-    
+
     # Handle priority if present
     if [[ "$display_text" == *"(high)"* || "$display_text" == *"(High)"* ]]; then
         priority_display="${RED}HIGH${NC}"
@@ -224,7 +224,7 @@ format_todo_display() {
         priority_display="${BLUE}LOW${NC}"
         display_text=$(echo "$display_text" | sed -E 's/\(low\)|\(Low\)//')
     fi
-    
+
     # Handle due date if present
     if [[ "$display_text" == *"(due:"* ]]; then
         # Extract date using sed
@@ -233,7 +233,7 @@ format_todo_display() {
         due_date_display="${PURPLE}DUE: $date_display${NC}"
         display_text=$(echo "$display_text" | sed -E 's/\(due: [^)]+\)//')
     fi
-    
+
     # Handle category if present
     if [[ "$display_text" == *"#"* ]]; then
         # Extract category using sed
@@ -241,18 +241,18 @@ format_todo_display() {
         category_display="${CYAN}#${cat_name}${NC}"
         display_text=$(echo "$display_text" | sed -E 's/\#[a-zA-Z0-9_-]+//')
     fi
-    
+
     # Clean up extra spaces
     display_text=$(echo "$display_text" | sed -E 's/  +/ /g' | sed -E 's/^ | $//')
-    
+
     # Print the todo in a single line
     printf "${BOLD}%2d${NC} [${status}] ${task_color}%-40s${NC}" "$num" "$display_text"
-    
+
     # Create metadata string with commas
     if [ -n "$priority_display" ]; then
         metadata="${priority_display}"
     fi
-    
+
     if [ -n "$due_date_display" ]; then
         if [ -n "$metadata" ]; then
             metadata="${metadata}, ${due_date_display}"
@@ -260,7 +260,7 @@ format_todo_display() {
             metadata="${due_date_display}"
         fi
     fi
-    
+
     if [ -n "$category_display" ]; then
         if [ -n "$metadata" ]; then
             metadata="${metadata}, ${category_display}"
@@ -268,12 +268,12 @@ format_todo_display() {
             metadata="${category_display}"
         fi
     fi
-    
+
     # Print metadata if any exists
     if [ -n "$metadata" ]; then
         printf " %b" "$metadata"
     fi
-    
+
     # End the line
     printf "\n"
 }
@@ -287,20 +287,20 @@ sync_to_server() {
     if ! is_sync_enabled; then
         return 1
     fi
-    
+
     if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_PATH" ] || [ -z "$SSH_KEY_PATH" ]; then
         echo "Error: Incomplete sync configuration. Run 'todo sync-setup' first."
         return 1
     fi
-    
+
     echo "Syncing to server..."
     # Expand tilde in SSH key path
     ssh_key_expanded=$(eval echo "$SSH_KEY_PATH")
-    
+
     # Capture rsync output and error code
     rsync_output=$(rsync -avz --mkpath -e "ssh -i \"$ssh_key_expanded\"" "$TODO_FILE" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH" 2>&1)
     rsync_exit_code=$?
-    
+
     if [ $rsync_exit_code -eq 0 ]; then
         echo "✓ Synced to server"
         return 0
@@ -314,20 +314,20 @@ sync_from_server() {
     if ! is_sync_enabled; then
         return 1
     fi
-    
+
     if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_PATH" ] || [ -z "$SSH_KEY_PATH" ]; then
         echo "Error: Incomplete sync configuration. Run 'todo sync-setup' first."
         return 1
     fi
-    
+
     echo "Syncing from server..."
     # Expand tilde in SSH key path
     ssh_key_expanded=$(eval echo "$SSH_KEY_PATH")
-    
+
     # Capture rsync output and error code
     rsync_output=$(rsync -avz -e "ssh -i \"$ssh_key_expanded\"" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH" "$TODO_FILE" 2>&1)
     rsync_exit_code=$?
-    
+
     if [ $rsync_exit_code -eq 0 ]; then
         echo "✓ Synced from server"
         return 0
@@ -357,12 +357,12 @@ get_remote_timestamp() {
         echo "0"
         return
     fi
-    
+
     if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_PATH" ] || [ -z "$SSH_KEY_PATH" ]; then
         echo "0"
         return
     fi
-    
+
     ssh_key_expanded=$(eval echo "$SSH_KEY_PATH")
     ssh -i "$ssh_key_expanded" -o ConnectTimeout=5 "$SERVER_USER@$SERVER_HOST" "if [ -f '$SERVER_PATH' ]; then stat -c %Y '$SERVER_PATH' 2>/dev/null || stat -f %m '$SERVER_PATH' 2>/dev/null; else echo '0'; fi" 2>/dev/null || echo "0"
 }
@@ -372,14 +372,14 @@ smart_sync() {
     if ! is_sync_enabled || [ "$AUTO_SYNC" != "true" ]; then
         return 0
     fi
-    
+
     local_timestamp=$(get_local_timestamp)
     remote_timestamp=$(get_remote_timestamp)
-    
+
     # If remote is newer than local, sync down
     if [ "$remote_timestamp" -gt "$local_timestamp" ]; then
         sync_from_server >/dev/null 2>&1
-    # If local is newer than remote, sync up  
+    # If local is newer than remote, sync up
     elif [ "$local_timestamp" -gt "$remote_timestamp" ]; then
         sync_to_server >/dev/null 2>&1
     fi
@@ -390,46 +390,46 @@ show_stats() {
     echo ""
     echo -e "${BOLD}Todo Statistics${NC}"
     echo ""
-    
+
     # Count total todos
     local total=$(grep -c -- "- \[" "$TODO_FILE")
-    
+
     # Count completed todos
     local completed=$(grep -c -- "- \[x\]" "$TODO_FILE")
-    
+
     # Calculate pending todos
     local pending=$((total - completed))
-    
+
     # Calculate completion percentage
     local percentage=0
     if [ $total -gt 0 ]; then
         percentage=$((completed * 100 / total))
     fi
-    
+
     # Count todos by priority
     local high=$(grep -c -i -- "(high)" "$TODO_FILE")
     local medium=$(grep -c -i -- "(medium)" "$TODO_FILE")
     local low=$(grep -c -i -- "(low)" "$TODO_FILE")
-    
+
     # Count todos with due dates
     local with_due=$(grep -c -- "(due:" "$TODO_FILE")
-    
+
     # Count todos by category
     local categories=$(grep -o -E "#[a-zA-Z0-9_-]+" "$TODO_FILE" | sort | uniq)
-    
+
     # Print statistics
     echo -e "${BOLD}Summary:${NC}"
     echo -e "  Total: ${BOLD}$total${NC}, Completed: ${GREEN}$completed${NC}, Pending: ${YELLOW}$pending${NC}, Progress: ${CYAN}$percentage%${NC}"
     echo ""
-    
+
     echo -e "${BOLD}By Priority:${NC}"
     echo -e "${GREEN}Completed: $completed${NC}, ${YELLOW}Pending: $pending${NC}, ${RED}High: $high${NC}, ${YELLOW}Medium: $medium${NC}, ${BLUE}Low: $low${NC}"
     echo ""
-    
+
     echo -e "${BOLD}Due Dates:${NC}"
     echo -e "  Tasks with due dates: ${PURPLE}$with_due${NC}"
     echo ""
-    
+
     if [ -n "$categories" ]; then
         echo -e "${BOLD}Categories:${NC}"
         while IFS= read -r category; do
@@ -452,18 +452,18 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
     if [ "$1" = "list" ]; then
         # Smart sync: pull if server newer, push if local newer
         smart_sync
-        
+
         # List all todos with line numbers
         echo ""
         echo -e "${BOLD}# Todo List${NC}"
         echo ""
- 
+
         # Get all todo lines with their line numbers - strict pattern to match only todo items
         line_nums=$(grep -n -- "^- \[[x ]\]" "$TODO_FILE" | cut -d: -f1)
- 
+
         # Counter for displayed numbers
         display_num=1
- 
+
         # If todos found, display them
         if [ -n "$line_nums" ]; then
             # Read the file line by line
@@ -472,7 +472,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
                 format_todo_display "$todo_line" "$display_num"
                 display_num=$((display_num+1))
             done <<< "$line_nums"
-            
+
             # Show a short stats summary
             echo ""
             total=$(grep -c -- "^- \[[x ]\]" "$TODO_FILE")
@@ -491,14 +491,14 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo "Usage: todo done <number>"
             exit 1
         fi
- 
+
         # Get the line numbers of all todos
         line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
- 
+
         # Convert displayed number to actual line number
         todo_num=1
         actual_line=""
- 
+
         while IFS= read -r line_num; do
             if [ "$todo_num" -eq "$2" ]; then
                 actual_line="$line_num"
@@ -506,23 +506,23 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             fi
             todo_num=$((todo_num+1))
         done <<< "$line_nums"
- 
+
         if [ -z "$actual_line" ]; then
             echo ""
             echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
- 
+
         # Get the current content of the line
         current_line=$(sed -n "${actual_line}p" "$TODO_FILE")
- 
+
         # Check if it's already done
         if [[ "$current_line" == *"- [x]"* ]]; then
             echo ""
             echo -e "${YELLOW}Todo #$2 is already marked as done.${NC}"
             exit 1
         fi
- 
+
         # Replace [ ] with [x] using a safer approach
         # Use awk instead of sed to avoid delimiter conflicts
         awk -v line_num="$actual_line" '
@@ -531,7 +531,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         }
         { print }
         ' "$TODO_FILE" > "$TODO_FILE.tmp"
- 
+
         # Check if the temp file has content before replacing
         if [ -s "$TODO_FILE.tmp" ]; then
             mv "$TODO_FILE.tmp" "$TODO_FILE"
@@ -555,14 +555,14 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo "Usage: todo undo <number>"
             exit 1
         fi
- 
+
         # Get the line numbers of all todos
         line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
- 
+
         # Convert displayed number to actual line number
         todo_num=1
         actual_line=""
- 
+
         while IFS= read -r line_num; do
             if [ "$todo_num" -eq "$2" ]; then
                 actual_line="$line_num"
@@ -570,23 +570,23 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             fi
             todo_num=$((todo_num+1))
         done <<< "$line_nums"
- 
+
         if [ -z "$actual_line" ]; then
             echo ""
             echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
- 
+
         # Get the current content of the line
         current_line=$(sed -n "${actual_line}p" "$TODO_FILE")
- 
+
         # Check if it's not done yet
         if [[ "$current_line" != *"- [x]"* ]]; then
             echo ""
             echo -e "${YELLOW}Todo #$2 is not marked as done.${NC}"
             exit 1
         fi
- 
+
         # Replace [x] with [ ] using awk to avoid delimiter conflicts
         awk -v line_num="$actual_line" '
         NR == line_num {
@@ -594,7 +594,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         }
         { print }
         ' "$TODO_FILE" > "$TODO_FILE.tmp"
- 
+
         # Check if the temp file has content before replacing
         if [ -s "$TODO_FILE.tmp" ]; then
             mv "$TODO_FILE.tmp" "$TODO_FILE"
@@ -618,21 +618,21 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo "Usage: todo remove <number>"
             exit 1
         fi
- 
+
         # Get the line numbers of all todos
         line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
- 
+
         # Check if there are any todos
         if [ -z "$line_nums" ]; then
             echo ""
             echo -e "${RED}Error: No todos found in the file.${NC}"
             exit 1
         fi
- 
+
         # Convert displayed number to actual line number
         todo_num=1
         actual_line=""
- 
+
         while IFS= read -r line_num; do
             if [ "$todo_num" -eq "$2" ]; then
                 actual_line="$line_num"
@@ -640,19 +640,19 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             fi
             todo_num=$((todo_num+1))
         done <<< "$line_nums"
- 
+
         if [ -z "$actual_line" ]; then
             echo ""
             echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
- 
+
         # Get the task that will be removed
         task=$(sed -n "${actual_line}p" "$TODO_FILE")
- 
+
         # Delete the specified line
         sed "${actual_line}d" "$TODO_FILE" > "$TODO_FILE.tmp"
- 
+
         # Check if the temp file has content
         # Even if the file is now empty except for the header, that's ok
         if [ -f "$TODO_FILE.tmp" ]; then
@@ -684,19 +684,19 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         # Remove all completed tasks
         # Make a backup of the file
         cp "$TODO_FILE" "${TODO_FILE}.bak"
- 
+
         # Count completed tasks before removing
         completed_count=$(grep -c -- "- \[x\]" "$TODO_FILE")
-        
+
         if [ "$completed_count" -eq 0 ]; then
             echo ""
             echo -e "${YELLOW}No completed tasks to clear.${NC}"
             exit 0
         fi
-        
+
         # Remove all lines with "[x]"
         grep -v -- "- \[x\]" "$TODO_FILE" > "${TODO_FILE}.tmp"
- 
+
         # Check if the temp file has content before replacing
         if [ -s "${TODO_FILE}.tmp" ]; then
             mv "${TODO_FILE}.tmp" "$TODO_FILE"
@@ -716,14 +716,14 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo "Usage: todo edit <number> [new description]"
             exit 1
         fi
- 
+
         # Get the line numbers of all todos
         line_nums=$(grep -n -- "- \[" "$TODO_FILE" | cut -d: -f1)
- 
+
         # Convert displayed number to actual line number
         todo_num=1
         actual_line=""
- 
+
         while IFS= read -r line_num; do
             if [ "$todo_num" -eq "$2" ]; then
                 actual_line="$line_num"
@@ -731,16 +731,16 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             fi
             todo_num=$((todo_num+1))
         done <<< "$line_nums"
- 
+
         if [ -z "$actual_line" ]; then
             echo ""
             echo -e "${RED}Error: Todo #$2 does not exist.${NC}"
             exit 1
         fi
- 
+
         # Get the current content of the line
         current_line=$(sed -n "${actual_line}p" "$TODO_FILE")
- 
+
         if [ -z "$3" ]; then
             # No new description provided, prompt the user
             old_description=${current_line#*]} 
@@ -750,7 +750,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo -e "Current task: ${CYAN}$old_description${NC}"
             echo -n "New description: "
             read -r new_description
- 
+
             # If user just pressed Enter, keep the old description
             if [ -z "$new_description" ]; then
                 new_description="$old_description"
@@ -767,23 +767,23 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             done
             new_description="${new_description:1}"
         fi
- 
+
         # Check if it's a completed task
         if [[ "$current_line" == *"- [x]"* ]]; then
             checkbox="- [x]"
         else
             checkbox="- [ ]"
         fi
- 
+
         # Create the new line
         new_line="$checkbox $new_description"
- 
+
         # Use awk to avoid sed delimiter issues
         awk -v line_num="$actual_line" -v new_content="$new_line" '
         NR == line_num { print new_content; next }
         { print }
         ' "$TODO_FILE" > "$TODO_FILE.tmp"
- 
+
         # Check if the temp file has content before replacing
         if [ -s "$TODO_FILE.tmp" ]; then
             mv "$TODO_FILE.tmp" "$TODO_FILE"
@@ -806,26 +806,26 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo "Usage: todo config <path>"
             exit 0
         fi
- 
+
         # Update the configuration
         NEW_TODO_FILE=$(eval echo "$2")
- 
+
         # Check if path is a directory, add a default filename if it is
         if [ -d "$NEW_TODO_FILE" ]; then
             NEW_TODO_FILE="${NEW_TODO_FILE%/}/todos.md"
             echo ""
             echo -e "${YELLOW}Notice: Path is a directory. Using $NEW_TODO_FILE as the todo file.${NC}"
         fi
- 
+
         # Store the new path in config
         echo "$NEW_TODO_FILE" > "$CONFIG_FILE"
- 
+
         # Update current variable
         TODO_FILE="$NEW_TODO_FILE"
- 
+
         # Create file if needed
         create_todo_file
- 
+
         echo ""
         echo -e "${GREEN}Todo file location updated to:${NC} $TODO_FILE"
     elif [ "$1" = "help" ]; then
@@ -839,22 +839,22 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             echo "Usage: todo search <term>"
             exit 1
         fi
-        
+
         # Shift to get all search terms
         shift
         search_term="$*"
-        
+
         echo ""
         echo -e "${BOLD}Search results for:${NC} ${CYAN}$search_term${NC}"
         echo ""
-        
+
         # Get all todo lines that match the search term
         matching_lines=$(grep -n -i -- "$search_term" "$TODO_FILE" | grep -- "- \[" | cut -d: -f1)
-        
+
         # Counter for displayed numbers
         display_num=1
         found=0
-        
+
         # Read the file line by line
         while IFS= read -r line_num; do
             todo_line=$(sed -n "${line_num}p" "$TODO_FILE")
@@ -862,7 +862,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
             display_num=$((display_num+1))
             found=1
         done <<< "$matching_lines"
-        
+
         if [ $found -eq 0 ]; then
             echo -e "${YELLOW}No matching todos found.${NC}"
         fi
@@ -874,18 +874,18 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         echo ""
         echo -e "${BOLD}Todo Sync Setup${NC}"
         echo ""
-        
+
         # Get server details
         read -p "Server hostname or IP: " server_host
         read -p "Username: " server_user
         read -p "Remote path (e.g., /home/user/todos.md): " server_path
         read -p "SSH key path (default: ~/.ssh/id_rsa): " ssh_key_path
-        
+
         # Use default if empty
         if [ -z "$ssh_key_path" ]; then
             ssh_key_path="~/.ssh/id_rsa"
         fi
-        
+
         # Create sync config file
         cat > "$SYNC_CONFIG_FILE" << EOF
 SYNC_ENABLED=true
@@ -895,17 +895,17 @@ SERVER_USER="$server_user"
 SERVER_PATH="$server_path"
 SSH_KEY_PATH="$ssh_key_path"
 EOF
-        
+
         echo ""
         echo -e "${GREEN}✓ Sync configuration saved to $SYNC_CONFIG_FILE${NC}"
         echo ""
         echo "Testing connection..."
-        
+
         # Test the connection
         ssh_key_expanded=$(eval echo "$ssh_key_path")
         if ssh -i "$ssh_key_expanded" "$server_user@$server_host" "mkdir -p $(dirname "$server_path")" 2>/dev/null; then
             echo -e "${GREEN}✓ Connection successful!${NC}"
-            
+
             # Do initial sync
             echo ""
             echo "Performing initial sync..."
@@ -922,7 +922,7 @@ EOF
             echo -e "${YELLOW}Sync not configured. Run 'todo sync-setup' first.${NC}"
             exit 1
         fi
-        
+
         echo ""
         echo "Syncing with server..."
         sync_from_server
@@ -934,7 +934,7 @@ EOF
             echo -e "${YELLOW}Sync not configured. Run 'todo sync-setup' first.${NC}"
             exit 1
         fi
-        
+
         echo ""
         sync_to_server
     elif [ "$1" = "sync-down" ]; then
@@ -944,7 +944,7 @@ EOF
             echo -e "${YELLOW}Sync not configured. Run 'todo sync-setup' first.${NC}"
             exit 1
         fi
-        
+
         echo ""
         sync_from_server
     fi
@@ -955,11 +955,11 @@ else
     priority=""
     due_date=""
     category=""
-    
+
     i=1
     while [ $i -le $# ]; do
         eval arg=\${$i}
-        
+
         case "$arg" in
             -p|--priority)
                 i=$((i+1))
@@ -1001,43 +1001,43 @@ else
                 fi
                 ;;
         esac
-        
+
         i=$((i+1))
     done
-    
+
     # Combine metadata with the task description
     full_description="$task_description"
-    
+
     # Add priority if specified
     if [ -n "$priority" ]; then
         full_description="$full_description $priority"
     fi
-    
+
     # Add due date if specified
     if [ -n "$due_date" ]; then
         full_description="$full_description $due_date"
     fi
-    
+
     # Add category if specified
     if [ -n "$category" ]; then
         full_description="$full_description $category"
     fi
-    
+
     # Add the new todo with checkbox to the file
     if [ -n "$full_description" ]; then
         echo "- [ ] $full_description" >> "$TODO_FILE"
         echo ""
         echo -e "${GREEN}Added todo:${NC}"
-        
+
         # Display newly added todo in a simple format with metadata on the same line
         echo -ne "${BOLD}*${NC} [ ] ${task_description}"
-        
+
         # Create metadata string with commas
         metadata=""
         if [ -n "$priority" ]; then
             metadata="${RED}${priority//[()]/}${NC}"
         fi
-        
+
         if [ -n "$due_date" ]; then
             if [ -n "$metadata" ]; then
                 metadata="${metadata}, ${PURPLE}DUE: $(echo "$due_date" | sed 's/due: //' | sed 's/[()]//g')${NC}"
@@ -1045,7 +1045,7 @@ else
                 metadata="${PURPLE}DUE: $(echo "$due_date" | sed 's/due: //' | sed 's/[()]//g')${NC}"
             fi
         fi
-        
+
         if [ -n "$category" ]; then
             if [ -n "$metadata" ]; then
                 metadata="${metadata}, ${CYAN}${category}${NC}"
@@ -1053,7 +1053,7 @@ else
                 metadata="${CYAN}${category}${NC}"
             fi
         fi
-        
+
         # Print metadata if any exists
         if [ -n "$metadata" ]; then
             echo -e " ${metadata}"
