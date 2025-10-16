@@ -340,7 +340,7 @@ format_todo_display() {
     display_text="${display_text% }"
 
     # Print the todo in a single line
-    printf "${BOLD}%2d${NC} [${status}] ${task_color}%-40s${NC}" "$num" "$display_text"
+    printf "${BOLD}%2d${NC} [${status}] ${task_color}%s${NC}" "$num" "$display_text"
 
     # Create metadata string with commas
     if [ -n "$priority_display" ]; then
