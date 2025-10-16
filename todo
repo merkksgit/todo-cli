@@ -308,10 +308,9 @@ format_todo_display() {
     fi
 
     # Handle due date if present using bash string operations
-    if [[ "$display_text" == *"(due:"* ]]; then
-        # Extract date using bash pattern matching
-        temp="${display_text#*(due: }"
-        date_raw="${temp%%)*}"
+    if [[ "$display_text" =~ \(due:\ ([0-9]{4}-[0-9]{2}-[0-9]{2})\) ]]; then
+        # Extract date using regex match
+        date_raw="${BASH_REMATCH[1]}"
         date_display=$(format_date_display "$date_raw")
         due_date_display="${PURPLE}DUE: $date_display${NC}"
         # Remove the due date part
@@ -573,14 +572,14 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         END {
             if (count > 0) {
                 for (i = 1; i <= count; i++) {
-                    printf "TODOITEM:%d:%s\n", i, todos[i]
+                    printf "TODOITEM\t%d\t%s\n", i, todos[i]
                 }
-                printf "STATS:%d:%d:%d\n", count, completed, (count - completed)
+                printf "STATS\t%d\t%d\t%d\n", count, completed, (count - completed)
             } else {
                 print "NOTODOS"
             }
         }
-        ' "$TODO_FILE" | while IFS=':' read -r type num content rest; do
+        ' "$TODO_FILE" | while IFS=$'\t' read -r type num content rest; do
             if [ "$type" = "TODOITEM" ]; then
                 format_todo_display "$content" "$num"
             elif [ "$type" = "STATS" ]; then
