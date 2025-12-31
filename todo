@@ -999,6 +999,7 @@ elif in_array "$1" "${COMMANDS[@]}" && { [ $# -eq 1 ] || [ "$1" = "list" ] || [ 
         cat > "$SYNC_CONFIG_FILE" << EOF
 SYNC_ENABLED=true
 AUTO_SYNC=true
+SYNC_MODE="online"
 SERVER_HOST="$server_host"
 SERVER_USER="$server_user"
 SERVER_PATH="$server_path"
@@ -1063,13 +1064,16 @@ EOF
             echo -e "${YELLOW}No sync configuration found. Sync is already disabled.${NC}"
             exit 0
         fi
-        
+
         # Update sync config to set offline mode
-        sed -i.bak 's/SYNC_MODE=.*/SYNC_MODE="offline"/' "$SYNC_CONFIG_FILE" 2>/dev/null || {
-            # If sed failed, append SYNC_MODE
+        if grep -q "^SYNC_MODE=" "$SYNC_CONFIG_FILE"; then
+            # Replace existing SYNC_MODE line
+            sed -i.bak 's/^SYNC_MODE=.*/SYNC_MODE="offline"/' "$SYNC_CONFIG_FILE"
+        else
+            # Append SYNC_MODE if it doesn't exist
             echo 'SYNC_MODE="offline"' >> "$SYNC_CONFIG_FILE"
-        }
-        
+        fi
+
         echo ""
         echo -e "${GREEN}✓ Switched to offline mode. Sync disabled.${NC}"
         echo "Use 'todo online' to re-enable sync."
@@ -1080,13 +1084,16 @@ EOF
             echo -e "${YELLOW}No sync configuration found. Run 'todo sync-setup' first.${NC}"
             exit 1
         fi
-        
+
         # Update sync config to set online mode
-        sed -i.bak 's/SYNC_MODE=.*/SYNC_MODE="online"/' "$SYNC_CONFIG_FILE" 2>/dev/null || {
-            # If sed failed, append SYNC_MODE
+        if grep -q "^SYNC_MODE=" "$SYNC_CONFIG_FILE"; then
+            # Replace existing SYNC_MODE line
+            sed -i.bak 's/^SYNC_MODE=.*/SYNC_MODE="online"/' "$SYNC_CONFIG_FILE"
+        else
+            # Append SYNC_MODE if it doesn't exist
             echo 'SYNC_MODE="online"' >> "$SYNC_CONFIG_FILE"
-        }
-        
+        fi
+
         echo ""
         echo -e "${GREEN}✓ Switched to online mode. Sync enabled.${NC}"
         echo "Use 'todo offline' to disable sync."
